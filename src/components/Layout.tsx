@@ -1,10 +1,26 @@
 
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { Ship, List } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Ship, List, LogOut } from 'lucide-react';
+import { Button } from './ui/button';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 const Layout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      toast.success('Sesión cerrada exitosamente');
+      navigate('/auth');
+    } catch (error: any) {
+      toast.error('Error al cerrar sesión');
+      console.error('Error:', error.message);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -38,6 +54,16 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                   Registros
                 </Link>
               </div>
+            </div>
+            <div className="flex items-center">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleLogout}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <LogOut className="h-5 w-5" />
+              </Button>
             </div>
           </div>
         </div>

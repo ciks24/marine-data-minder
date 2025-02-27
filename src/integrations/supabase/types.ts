@@ -9,7 +9,42 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      marine_services: {
+        Row: {
+          client_name: string
+          created_at: string | null
+          details: string
+          id: string
+          photo_url: string | null
+          start_date_time: string
+          updated_at: string | null
+          user_id: string | null
+          vessel_name: string
+        }
+        Insert: {
+          client_name: string
+          created_at?: string | null
+          details: string
+          id?: string
+          photo_url?: string | null
+          start_date_time: string
+          updated_at?: string | null
+          user_id?: string | null
+          vessel_name: string
+        }
+        Update: {
+          client_name?: string
+          created_at?: string | null
+          details?: string
+          id?: string
+          photo_url?: string | null
+          start_date_time?: string
+          updated_at?: string | null
+          user_id?: string | null
+          vessel_name?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
