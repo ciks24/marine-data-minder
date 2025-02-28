@@ -17,19 +17,25 @@ const App = () => (
     <BrowserRouter>
       <Routes>
         <Route path="/auth" element={<AuthPage />} />
-        <Route
-          element={
-            <AuthGuard>
-              <Layout>
-                <Routes>
-                  <Route path="/" element={<Index />} />
-                  <Route path="/records" element={<Records />} />
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </Layout>
-            </AuthGuard>
-          }
-        />
+        <Route path="/" element={
+          <AuthGuard>
+            <Layout>
+              <Routes>
+                <Route index element={<Index />} />
+                <Route path="/records" element={<Records />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Layout>
+          </AuthGuard>
+        } />
+        <Route path="/records" element={
+          <AuthGuard>
+            <Layout>
+              <Records />
+            </Layout>
+          </AuthGuard>
+        } />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
   </QueryClientProvider>
