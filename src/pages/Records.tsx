@@ -21,17 +21,27 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Button } from '@/components/ui/button';
 import { Badge } from "@/components/ui/badge";
 import { syncService, useOnlineStatus } from '@/services/syncService';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import type { MarineService } from '../types/service';
+import ServiceForm from '../components/ServiceForm';
 
 const Records = () => {
   const [services, setServices] = useState<MarineService[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [editingService, setEditingService] = useState<MarineService | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
   const isOnline = useOnlineStatus();
   const { user } = useAuth();
 
@@ -131,6 +141,60 @@ const Records = () => {
     }
   };
 
+  const handleEdit = (service: MarineService) => {
+    setEditingService(service);
+    setIsEditing(true);
+  };
+
+  const handleUpdate = async (updatedData: any) => {
+    if (!editingService) return;
+
+    try {
+      setIsEditing(true);
+      
+      // Crear servicio actualizado
+      const updatedService: MarineService = {
+        ...editingService,
+        ...updatedData,
+        updatedAt: new Date().toISOString(),
+        synced: false
+      };
+
+      // Actualizar en almacenamiento local
+      const updatedServices = services.map(service => 
+        service.id === updatedService.id ? updatedService : service
+      );
+      localStorage.setItem('services', JSON.stringify(updatedServices));
+      setServices(updatedServices);
+
+      // Intentar sincronizar con Supabase si hay conexión
+      if (isOnline && user) {
+        const syncedService = await syncService.saveService(updatedService);
+        
+        if (syncedService) {
+          // Actualizar el servicio en localStorage con la versión sincronizada
+          const newServices = updatedServices.map(s => 
+            s.id === syncedService.id ? syncedService : s
+          );
+          localStorage.setItem('services', JSON.stringify(newServices));
+          setServices(newServices);
+          toast.success('Servicio actualizado y sincronizado exitosamente');
+        } else {
+          toast.warning('Servicio actualizado localmente, pero no se pudo sincronizar');
+        }
+      } else {
+        toast.info('Servicio actualizado localmente. Se sincronizará cuando haya conexión');
+      }
+
+      setEditingService(null);
+    } catch (error) {
+      toast.error('Error al actualizar el servicio');
+      console.error('Error updating service:', error);
+    } finally {
+      setIsEditing(false);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     try {
       // Eliminar localmente
@@ -174,18 +238,18 @@ const Records = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Registros de Servicios</h1>
+          <h1 className="text-2xl font-semibold">Registros de Servicios</h1>
           <div className="flex items-center mt-1">
-            <span className="text-sm text-gray-500 mr-1">Estado:</span>
+            <span className="text-sm text-muted-foreground mr-1">Estado:</span>
             {isOnline ? (
-              <Badge variant="outline" className="bg-green-50 text-green-700 flex items-center space-x-1">
+              <Badge variant="outline" className="bg-green-500/10 text-green-500 dark:bg-green-500/20 flex items-center space-x-1">
                 <Wifi className="h-3 w-3" />
                 <span>Conectado</span>
               </Badge>
             ) : (
-              <Badge variant="outline" className="bg-amber-50 text-amber-700 flex items-center space-x-1">
+              <Badge variant="outline" className="bg-amber-500/10 text-amber-500 dark:bg-amber-500/20 flex items-center space-x-1">
                 <WifiOff className="h-3 w-3" />
                 <span>Sin conexión</span>
               </Badge>
@@ -200,7 +264,7 @@ const Records = () => {
             disabled={!isOnline || isLoading}
           >
             <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-            Actualizar
+            <span className="hidden sm:inline">Actualizar</span>
           </Button>
           <Button 
             onClick={syncServices} 
@@ -209,25 +273,25 @@ const Records = () => {
             disabled={!isOnline || isSyncing}
           >
             <ArrowUpCircle className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
-            Sincronizar
+            <span className="hidden sm:inline">Sincronizar</span>
           </Button>
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         {services.map((service) => (
-          <Card key={service.id} className="relative">
+          <Card key={service.id} className="relative flex flex-col">
             <CardHeader>
               <CardTitle className="text-lg">{service.vesselName}</CardTitle>
               <CardDescription>{service.clientName}</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 flex-grow">
               <div>
-                <p className="text-sm font-medium text-gray-500">Fecha y Hora</p>
+                <p className="text-sm font-medium text-muted-foreground">Fecha y Hora</p>
                 <p>{new Date(service.startDateTime).toLocaleString()}</p>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-500">Detalle</p>
+                <p className="text-sm font-medium text-muted-foreground">Detalle</p>
                 <p className="text-sm">{service.details}</p>
               </div>
               {service.photoUrl && (
@@ -243,13 +307,21 @@ const Records = () => {
               )}
               {!service.synced && (
                 <div className="absolute top-3 right-3">
-                  <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
+                  <Badge variant="outline" className="bg-yellow-500/10 text-yellow-500 dark:bg-yellow-500/20">
                     No sincronizado
                   </Badge>
                 </div>
               )}
             </CardContent>
-            <CardFooter className="flex justify-end space-x-2">
+            <CardFooter className="flex justify-end space-x-2 mt-auto">
+              <Button 
+                variant="outline" 
+                size="icon"
+                onClick={() => handleEdit(service)}
+              >
+                <Edit2 className="h-4 w-4" />
+              </Button>
+              
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button variant="outline" size="icon">
@@ -278,9 +350,35 @@ const Records = () => {
 
       {services.length === 0 && (
         <div className="text-center py-12">
-          <p className="text-gray-500">No hay registros disponibles</p>
+          <p className="text-muted-foreground">No hay registros disponibles</p>
         </div>
       )}
+
+      {/* Modal de edición */}
+      <Dialog open={isEditing} onOpenChange={(open) => {
+        setIsEditing(open);
+        if (!open) setEditingService(null);
+      }}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Editar Registro</DialogTitle>
+          </DialogHeader>
+          
+          {editingService && (
+            <ServiceForm 
+              initialData={{
+                clientName: editingService.clientName,
+                vesselName: editingService.vesselName,
+                startDateTime: editingService.startDateTime,
+                details: editingService.details,
+                photoUrl: editingService.photoUrl
+              }}
+              onSubmit={handleUpdate}
+              isSubmitting={isEditing}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

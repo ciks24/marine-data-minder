@@ -8,36 +8,35 @@ import Index from "./pages/Index";
 import Records from "./pages/Records";
 import AuthPage from "./pages/auth/AuthPage";
 import NotFound from "./pages/NotFound";
+import { ThemeProvider } from "./hooks/useTheme";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <Toaster position="top-right" />
-    <BrowserRouter>
-      <Routes>
-        <Route path="/auth" element={<AuthPage />} />
-        <Route path="/" element={
-          <AuthGuard>
-            <Layout>
-              <Routes>
-                <Route index element={<Index />} />
-                <Route path="/records" element={<Records />} />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </Layout>
-          </AuthGuard>
-        } />
-        <Route path="/records" element={
-          <AuthGuard>
-            <Layout>
-              <Records />
-            </Layout>
-          </AuthGuard>
-        } />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </BrowserRouter>
+    <ThemeProvider>
+      <Toaster position="top-right" />
+      <BrowserRouter>
+        <Routes>
+          <Route path="/auth" element={<AuthPage />} />
+          <Route path="/" element={
+            <AuthGuard>
+              <Layout>
+                <Index />
+              </Layout>
+            </AuthGuard>
+          } />
+          <Route path="/records" element={
+            <AuthGuard>
+              <Layout>
+                <Records />
+              </Layout>
+            </AuthGuard>
+          } />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </BrowserRouter>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 
