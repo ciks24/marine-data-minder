@@ -6,7 +6,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
-import { Camera, Save, X } from 'lucide-react';
+import { Camera, Save, X, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -18,9 +18,10 @@ import {
 interface ServiceFormProps {
   onSubmit: (data: ServiceFormData) => void;
   initialData?: ServiceFormData;
+  isSubmitting?: boolean;
 }
 
-const ServiceForm = ({ onSubmit, initialData }: ServiceFormProps) => {
+const ServiceForm = ({ onSubmit, initialData, isSubmitting = false }: ServiceFormProps) => {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const { register, handleSubmit, watch, formState: { errors } } = useForm<ServiceFormData>({
@@ -63,6 +64,7 @@ const ServiceForm = ({ onSubmit, initialData }: ServiceFormProps) => {
             {...register('clientName', { required: 'Este campo es requerido' })}
             className="form-input"
             placeholder="Ingrese el nombre del cliente"
+            disabled={isSubmitting}
           />
           {errors.clientName && (
             <p className="mt-1 text-sm text-red-600">{errors.clientName.message}</p>
@@ -76,6 +78,7 @@ const ServiceForm = ({ onSubmit, initialData }: ServiceFormProps) => {
             {...register('vesselName', { required: 'Este campo es requerido' })}
             className="form-input"
             placeholder="Ingrese el nombre de la embarcación"
+            disabled={isSubmitting}
           />
           {errors.vesselName && (
             <p className="mt-1 text-sm text-red-600">{errors.vesselName.message}</p>
@@ -89,6 +92,7 @@ const ServiceForm = ({ onSubmit, initialData }: ServiceFormProps) => {
             type="datetime-local"
             {...register('startDateTime', { required: 'Este campo es requerido' })}
             className="form-input"
+            disabled={isSubmitting}
           />
           {errors.startDateTime && (
             <p className="mt-1 text-sm text-red-600">{errors.startDateTime.message}</p>
@@ -102,6 +106,7 @@ const ServiceForm = ({ onSubmit, initialData }: ServiceFormProps) => {
             {...register('details', { required: 'Este campo es requerido' })}
             className="form-input min-h-[100px]"
             placeholder="Ingrese los detalles del servicio"
+            disabled={isSubmitting}
           />
           {errors.details && (
             <p className="mt-1 text-sm text-red-600">{errors.details.message}</p>
@@ -118,6 +123,7 @@ const ServiceForm = ({ onSubmit, initialData }: ServiceFormProps) => {
               variant="outline"
               onClick={() => document.getElementById('photo')?.click()}
               className="flex items-center space-x-2"
+              disabled={isSubmitting}
             >
               <Camera className="w-4 h-4" />
               <span>Tomar Foto</span>
@@ -129,6 +135,7 @@ const ServiceForm = ({ onSubmit, initialData }: ServiceFormProps) => {
               capture="environment"
               className="hidden"
               onChange={handlePhotoChange}
+              disabled={isSubmitting}
             />
           </div>
           {selectedPhoto && (
@@ -144,9 +151,18 @@ const ServiceForm = ({ onSubmit, initialData }: ServiceFormProps) => {
       </div>
 
       <div className="flex justify-end space-x-4">
-        <Button type="submit" className="btn-primary">
-          <Save className="w-4 h-4 mr-2" />
-          Previsualizar
+        <Button type="submit" className="btn-primary" disabled={isSubmitting}>
+          {isSubmitting ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Procesando...
+            </>
+          ) : (
+            <>
+              <Save className="w-4 h-4 mr-2" />
+              Previsualizar
+            </>
+          )}
         </Button>
       </div>
 
@@ -184,16 +200,28 @@ const ServiceForm = ({ onSubmit, initialData }: ServiceFormProps) => {
             )}
           </div>
           <DialogFooter className="flex justify-end space-x-4 mt-6">
-            <Button variant="outline" onClick={() => setPreviewOpen(false)}>
+            <Button variant="outline" onClick={() => setPreviewOpen(false)} disabled={isSubmitting}>
               <X className="w-4 h-4 mr-2" />
               Cerrar
             </Button>
-            <Button onClick={() => {
-              handleFormSubmit(formData);
-              setPreviewOpen(false);
-            }}>
-              <Save className="w-4 h-4 mr-2" />
-              Guardar
+            <Button 
+              onClick={() => {
+                handleFormSubmit(formData);
+                setPreviewOpen(false);
+              }}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 mr-2" />
+                  Guardar
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
