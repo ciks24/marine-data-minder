@@ -36,18 +36,19 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {/* Navbar optimizado para ocupar menos espacio */}
       <nav className="bg-card border-b border-border sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex">
+        <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6">
+          <div className="flex justify-between h-14">
+            <div className="flex items-center">
               <div className="flex-shrink-0 flex items-center">
-                <Ship className="h-8 w-8 text-primary" />
-                <span className="ml-2 text-xl font-semibold">M&S Control</span>
+                <Ship className="h-6 w-6 text-primary" />
+                <span className="ml-2 text-lg font-semibold text-foreground">M&S Control</span>
               </div>
-              <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
+              <div className="hidden sm:ml-4 sm:flex sm:space-x-4">
                 <Link
                   to="/"
-                  className={`inline-flex items-center px-1 pt-1 ${
+                  className={`inline-flex items-center px-1 pt-1 text-sm ${
                     location.pathname === '/'
                       ? 'border-b-2 border-primary text-primary font-medium'
                       : 'text-muted-foreground hover:text-foreground hover:border-muted transition-colors'
@@ -57,7 +58,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                 </Link>
                 <Link
                   to="/records"
-                  className={`inline-flex items-center px-1 pt-1 ${
+                  className={`inline-flex items-center px-1 pt-1 text-sm ${
                     location.pathname === '/records'
                       ? 'border-b-2 border-primary text-primary font-medium'
                       : 'text-muted-foreground hover:text-foreground hover:border-muted transition-colors'
@@ -67,7 +68,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                 </Link>
               </div>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-1">
               <Button
                 variant="ghost"
                 size="icon"
@@ -76,9 +77,9 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                 aria-label={theme === 'dark' ? 'Activar modo claro' : 'Activar modo oscuro'}
               >
                 {theme === 'dark' ? (
-                  <Sun className="h-5 w-5" />
+                  <Sun className="h-4 w-4" />
                 ) : (
-                  <Moon className="h-5 w-5" />
+                  <Moon className="h-4 w-4" />
                 )}
               </Button>
 
@@ -89,7 +90,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                     size="icon"
                     className="text-muted-foreground hover:text-foreground"
                   >
-                    <Settings className="h-5 w-5" />
+                    <Settings className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48 bg-popover text-popover-foreground">
@@ -104,28 +105,29 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 pb-16 sm:pb-8">
         {children}
       </main>
 
+      {/* Barra inferior móvil optimizada para ocupar menos espacio */}
       <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border z-10">
         <div className="grid grid-cols-2">
           <Link
             to="/"
-            className={`flex flex-col items-center p-4 ${
+            className={`flex flex-col items-center py-2 ${
               location.pathname === '/' ? 'text-primary' : 'text-muted-foreground'
             }`}
           >
-            <Ship className="h-6 w-6" />
+            <Ship className="h-5 w-5" />
             <span className="mt-1 text-xs">Nuevo</span>
           </Link>
           <Link
             to="/records"
-            className={`flex flex-col items-center p-4 ${
+            className={`flex flex-col items-center py-2 ${
               location.pathname === '/records' ? 'text-primary' : 'text-muted-foreground'
             }`}
           >
-            <List className="h-6 w-6" />
+            <List className="h-5 w-5" />
             <span className="mt-1 text-xs">Registros</span>
           </Link>
         </div>

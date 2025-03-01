@@ -30,7 +30,7 @@ const EditServiceDialog: React.FC<EditServiceDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle>Editar Registro</DialogTitle>
+          <DialogTitle className="text-xl text-foreground">Editar Registro</DialogTitle>
         </DialogHeader>
         
         <ServiceForm 
@@ -43,6 +43,7 @@ const EditServiceDialog: React.FC<EditServiceDialogProps> = ({
           }}
           onSubmit={onUpdate}
           isSubmitting={isSubmitting}
+          isEditMode={true}
         />
       </DialogContent>
     </Dialog>

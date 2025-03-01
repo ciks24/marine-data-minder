@@ -57,7 +57,13 @@
 /* Mejoras responsivas */
 .responsive-container {
   width: 100%;
-  padding: 1rem;
+  padding: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .responsive-container {
+    padding: 1rem;
+  }
 }
 
 .responsive-text {
@@ -71,13 +77,48 @@
 }
 
 .responsive-button {
-  padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.8rem;
 }
 
 @media (min-width: 640px) {
   .responsive-button {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .responsive-button {
     padding: 0.625rem 1.25rem;
     font-size: 1rem;
   }
+}
+
+/* Mejoras de contraste */
+.high-contrast-text {
+  text-shadow: 0 0 1px rgba(0,0,0,0.1);
+}
+
+.dark .high-contrast-text {
+  text-shadow: 0 0 1px rgba(255,255,255,0.2);
+}
+
+/* Formato para fechas y horas */
+.datetime-field {
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+/* Ajustes para mejorar visibilidad en elementos */
+.card-hover {
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.dark .card-hover:hover {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.15);
 }

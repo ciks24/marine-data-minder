@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { MarineService, ServiceFormData } from '@/types/service';
@@ -15,18 +14,15 @@ export const useRecordsSync = () => {
   const isOnline = useOnlineStatus();
   const { user } = useAuth();
 
-  // Cargar datos locales al iniciar
   useEffect(() => {
     const loadedServices = JSON.parse(localStorage.getItem('services') || '[]');
     setServices(loadedServices);
     setIsLoading(false);
   }, []);
 
-  // Configurar canal de tiempo real para actualizar datos
   useEffect(() => {
     if (!user) return;
 
-    // Suscribirse a cambios en tiempo real en la tabla marine_services
     const channel = supabase
       .channel('db-changes')
       .on(
@@ -37,7 +33,6 @@ export const useRecordsSync = () => {
           table: 'marine_services'
         },
         async () => {
-          // Refrescar datos desde Supabase cuando hay cambios
           if (isOnline) {
             await fetchServicesFromCloud();
           }
@@ -50,7 +45,6 @@ export const useRecordsSync = () => {
     };
   }, [user, isOnline]);
 
-  // Intentar sincronizar al recuperar la conexión
   useEffect(() => {
     if (isOnline && user && !isLoading) {
       toast.info('Conexión a Internet detectada. Sincronizando datos...');
@@ -58,7 +52,6 @@ export const useRecordsSync = () => {
     }
   }, [isOnline, user]);
 
-  // Función para cargar servicios desde Supabase
   const fetchServicesFromCloud = async () => {
     if (!user || !isOnline) return;
 
@@ -66,18 +59,14 @@ export const useRecordsSync = () => {
       const cloudServices = await syncService.fetchAllServices();
       
       if (cloudServices.length > 0) {
-        // Combinar datos locales y remotos
         const localServices = JSON.parse(localStorage.getItem('services') || '[]');
         
-        // Identificar servicios que solo existen localmente
         const localOnlyServices = localServices.filter(
           local => !cloudServices.some(cloud => cloud.id === local.id)
         );
         
-        // Combinar servicios de la nube con los que solo existen localmente
         const combinedServices = [...cloudServices, ...localOnlyServices];
         
-        // Actualizar datos locales
         localStorage.setItem('services', JSON.stringify(combinedServices));
         setServices(combinedServices);
       }
@@ -86,7 +75,6 @@ export const useRecordsSync = () => {
     }
   };
 
-  // Sincronizar servicios con Supabase
   const syncServices = async () => {
     if (!isOnline || !user) {
       toast.error('No hay conexión a Internet. Intente más tarde.');
@@ -95,11 +83,9 @@ export const useRecordsSync = () => {
 
     setIsSyncing(true);
     try {
-      // Sincronizar servicios no sincronizados
       const syncedServices = await syncService.syncAllServices(services);
       setServices(syncedServices);
       
-      // Luego obtener los datos más recientes de la nube
       await fetchServicesFromCloud();
       
       toast.success('Registros sincronizados exitosamente');
@@ -122,7 +108,6 @@ export const useRecordsSync = () => {
     try {
       setIsEditing(true);
       
-      // Crear servicio actualizado
       const updatedService: MarineService = {
         ...editingService,
         ...updatedData,
@@ -130,19 +115,16 @@ export const useRecordsSync = () => {
         synced: false
       };
 
-      // Actualizar en almacenamiento local
       const updatedServices = services.map(service => 
         service.id === updatedService.id ? updatedService : service
       );
       localStorage.setItem('services', JSON.stringify(updatedServices));
       setServices(updatedServices);
 
-      // Intentar sincronizar con Supabase si hay conexión
       if (isOnline && user) {
         const syncedService = await syncService.saveService(updatedService);
         
         if (syncedService) {
-          // Actualizar el servicio en localStorage con la versión sincronizada
           const newServices = updatedServices.map(s => 
             s.id === syncedService.id ? syncedService : s
           );
@@ -167,12 +149,10 @@ export const useRecordsSync = () => {
 
   const handleDelete = async (id: string) => {
     try {
-      // Eliminar localmente
       const updatedServices = services.filter(service => service.id !== id);
       localStorage.setItem('services', JSON.stringify(updatedServices));
       setServices(updatedServices);
 
-      // Intentar eliminar en la nube si hay conexión
       if (isOnline && user) {
         const deleted = await syncService.deleteService(id);
         if (!deleted) {
