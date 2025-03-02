@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">marine-data-minder</string>
+    <string name="title_activity_main">marine-data-minder</string>
+    <string name="package_name">app.lovable.e0e7ed6d5d3747c09e37f42cc250652c</string>
+    <string name="custom_url_scheme">app.lovable.e0e7ed6d5d3747c09e37f42cc250652c</string>
+</resources>
