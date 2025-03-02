@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { MarineService, ServiceFormData } from '@/types/service';
@@ -24,40 +23,7 @@ export const useRecordsSync = () => {
     setIsLoading(false);
   }, []);
 
-  // Configurar canal de cambios de Supabase
-  useEffect(() => {
-    if (!user) return;
-
-    const channel = supabase
-      .channel('db-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'marine_services'
-        },
-        async () => {
-          if (isOnline) {
-            await fetchServicesFromCloud();
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user, isOnline]);
-
-  // Sincronizar cuando se detecta conexión
-  useEffect(() => {
-    if (isOnline && user && !isLoading) {
-      syncServices();
-    }
-  }, [isOnline, user]);
-
-  const fetchServicesFromCloud = async () => {
+  const fetchServicesFromCloud = async (showNotification = false) => {
     if (!user || !isOnline) return;
 
     try {
@@ -74,9 +40,16 @@ export const useRecordsSync = () => {
         
         localStorage.setItem('services', JSON.stringify(combinedServices));
         setServices(combinedServices);
+
+        if (showNotification) {
+          toast.success('Registros actualizados desde la nube');
+        }
       }
     } catch (error) {
       console.error('Error al obtener servicios de la nube:', error);
+      if (showNotification) {
+        toast.error('Error al actualizar desde la nube');
+      }
     }
   };
 
@@ -91,8 +64,7 @@ export const useRecordsSync = () => {
       const syncedServices = await syncService.syncAllServices(services);
       setServices(syncedServices);
       
-      await fetchServicesFromCloud();
-      
+      await fetchServicesFromCloud(false);
       toast.success('Registros sincronizados exitosamente');
     } catch (error) {
       console.error('Error durante la sincronización:', error);
@@ -162,7 +134,6 @@ export const useRecordsSync = () => {
     try {
       setIsSubmitting(true);
       
-      // Mantener la lista de fotos existentes (photoUrls)
       const updatedService: MarineService = {
         ...editingService,
         clientName: updatedData.clientName,
@@ -180,23 +151,9 @@ export const useRecordsSync = () => {
       localStorage.setItem('services', JSON.stringify(updatedServices));
       setServices(updatedServices);
 
-      if (isOnline && user) {
-        const syncedService = await syncService.saveService(updatedService);
-        
-        if (syncedService) {
-          const newServices = updatedServices.map(s => 
-            s.id === syncedService.id ? syncedService : s
-          );
-          localStorage.setItem('services', JSON.stringify(newServices));
-          setServices(newServices);
-          toast.success('Servicio actualizado exitosamente');
-        }
-      }
-
       setEditingService(null);
       setIsEditing(false);
     } catch (error) {
-      toast.error('Error al actualizar el servicio');
       console.error('Error updating service:', error);
     } finally {
       setIsSubmitting(false);
@@ -210,16 +167,10 @@ export const useRecordsSync = () => {
       setServices(updatedServices);
 
       if (isOnline && user) {
-        const deleted = await syncService.deleteService(id);
-        if (!deleted) {
-          toast.warning('El registro se eliminó localmente, pero no en la nube');
-        } else {
-          toast.success('Registro eliminado completamente');
-        }
+        await syncService.deleteService(id);
       }
     } catch (error) {
       console.error('Error al eliminar:', error);
-      toast.error('Error al eliminar el registro');
     }
   };
 
@@ -231,8 +182,7 @@ export const useRecordsSync = () => {
     
     setIsLoading(true);
     try {
-      await fetchServicesFromCloud();
-      toast.success('Registros actualizados desde la nube');
+      await fetchServicesFromCloud(true);
     } catch (error) {
       toast.error('Error al actualizar desde la nube');
     } finally {
