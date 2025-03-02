@@ -5,6 +5,29 @@ import ServiceForm from '../components/ServiceForm';
 import { syncService } from '@/services/syncService';
 import { useAuth } from '@/hooks/useAuth';
 import type { ServiceFormData, MarineService } from '../types/service';
+import { openDB } from 'idb';
+
+// Configuración de IndexedDB
+const DB_NAME = 'marine-data-minder';
+const STORE_NAME = 'services';
+const DB_VERSION = 1;
+
+// Inicializar IndexedDB
+const initDB = async () => {
+  try {
+    const db = await openDB(DB_NAME, DB_VERSION, {
+      upgrade(db) {
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+        }
+      },
+    });
+    return db;
+  } catch (error) {
+    console.error('Error inicializando IndexedDB:', error);
+    return null;
+  }
+};
 
 const Index = () => {
   const navigate = useNavigate();
@@ -23,16 +46,64 @@ const Index = () => {
     }
   };
 
-  // Función para limpiar datos antiguos si es necesario
-  const cleanupOldData = () => {
+  // Función para guardar en IndexedDB
+  const saveToIndexedDB = async (service: MarineService) => {
     try {
-      const services = JSON.parse(localStorage.getItem('services') || '[]');
+      const db = await initDB();
+      if (!db) throw new Error('No se pudo inicializar IndexedDB');
+      
+      await db.put(STORE_NAME, service);
+      return true;
+    } catch (error) {
+      console.error('Error guardando en IndexedDB:', error);
+      return false;
+    }
+  };
+
+  // Función para obtener servicios de IndexedDB
+  const getFromIndexedDB = async () => {
+    try {
+      const db = await initDB();
+      if (!db) throw new Error('No se pudo inicializar IndexedDB');
+      
+      return await db.getAll(STORE_NAME);
+    } catch (error) {
+      console.error('Error obteniendo datos de IndexedDB:', error);
+      return [];
+    }
+  };
+
+  // Función para limpiar datos antiguos
+  const cleanupOldData = async () => {
+    try {
+      let services: MarineService[] = [];
+      
+      // Intentar obtener servicios de localStorage primero
+      if (checkStorageAvailability()) {
+        services = JSON.parse(localStorage.getItem('services') || '[]');
+      } else {
+        // Si localStorage no está disponible, usar IndexedDB
+        services = await getFromIndexedDB();
+      }
+
       // Mantener solo los últimos 50 registros si hay más
       if (services.length > 50) {
-        const sortedServices = services.sort((a: MarineService, b: MarineService) => 
+        const sortedServices = services.sort((a, b) => 
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
-        localStorage.setItem('services', JSON.stringify(sortedServices.slice(0, 50)));
+        const trimmedServices = sortedServices.slice(0, 50);
+
+        // Guardar servicios recortados
+        if (checkStorageAvailability()) {
+          localStorage.setItem('services', JSON.stringify(trimmedServices));
+        } else {
+          const db = await initDB();
+          if (db) {
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            await tx.store.clear();
+            await Promise.all(trimmedServices.map(service => tx.store.put(service)));
+          }
+        }
       }
     } catch (e) {
       console.error('Error limpiando datos antiguos:', e);
@@ -43,12 +114,6 @@ const Index = () => {
     try {
       setIsSubmitting(true);
 
-      // Verificar disponibilidad de localStorage
-      if (!checkStorageAvailability()) {
-        toast.error('No hay espacio de almacenamiento disponible');
-        return;
-      }
-
       // Crear nuevo servicio con los datos del formulario
       const newService: MarineService = {
         ...data,
@@ -58,27 +123,29 @@ const Index = () => {
         synced: false
       };
 
-      // Guardar en almacenamiento local
-      try {
-        // Intentar limpiar datos antiguos primero
-        cleanupOldData();
+      // Intentar limpiar datos antiguos primero
+      await cleanupOldData();
 
-        // Intentar guardar el nuevo servicio
-        const services = JSON.parse(localStorage.getItem('services') || '[]');
-        services.push(newService);
-        const servicesString = JSON.stringify(services);
-
+      // Intentar guardar en localStorage primero
+      let savedLocally = false;
+      if (checkStorageAvailability()) {
         try {
-          localStorage.setItem('services', servicesString);
-        } catch (storageError) {
-          // Si falla, intentar limpiar más datos y reintentar
-          cleanupOldData();
-          localStorage.setItem('services', servicesString);
+          const services = JSON.parse(localStorage.getItem('services') || '[]');
+          services.push(newService);
+          localStorage.setItem('services', JSON.stringify(services));
+          savedLocally = true;
+        } catch (localError) {
+          console.error('Error guardando en localStorage:', localError);
         }
-      } catch (localError) {
-        console.error('Error guardando en localStorage:', localError);
-        toast.error('Error al guardar. Intente limpiar el caché de la aplicación.');
-        return;
+      }
+
+      // Si localStorage falla, intentar con IndexedDB
+      if (!savedLocally) {
+        savedLocally = await saveToIndexedDB(newService);
+        if (!savedLocally) {
+          toast.error('Error al guardar. Por favor, intente nuevamente.');
+          return;
+        }
       }
 
       // Intentar sincronizar con Supabase si hay conexión
@@ -87,12 +154,16 @@ const Index = () => {
           const syncedService = await syncService.saveService(newService);
           
           if (syncedService) {
-            // Actualizar el servicio en localStorage con la versión sincronizada
-            const services = JSON.parse(localStorage.getItem('services') || '[]');
-            const updatedServices = services.map(s => 
-              s.id === syncedService.id ? syncedService : s
-            );
-            localStorage.setItem('services', JSON.stringify(updatedServices));
+            // Actualizar el servicio en el almacenamiento local
+            if (checkStorageAvailability()) {
+              const services = JSON.parse(localStorage.getItem('services') || '[]');
+              const updatedServices = services.map(s => 
+                s.id === syncedService.id ? syncedService : s
+              );
+              localStorage.setItem('services', JSON.stringify(updatedServices));
+            } else {
+              await saveToIndexedDB(syncedService);
+            }
             toast.success('Servicio registrado y sincronizado exitosamente');
           } else {
             toast.warning('Servicio guardado localmente, pero no se pudo sincronizar');
@@ -100,7 +171,6 @@ const Index = () => {
         } catch (syncError: any) {
           console.error('Error sincronizando con Supabase:', syncError);
           toast.error(`Error al sincronizar: ${syncError.message || 'Error desconocido'}`);
-          return;
         }
       } else {
         toast.info('Servicio guardado localmente. Se sincronizará cuando haya conexión');
