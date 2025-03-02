@@ -102,9 +102,9 @@ export const useRecordsSync = () => {
     try {
       const cloudServices = await syncService.fetchAllServices();
       
-      if (cloudServices.length > 0) {
-        let localServices: MarineService[] = [];
-        
+      // Obtener servicios locales
+      let localServices: MarineService[] = [];
+      try {
         if (checkStorageAvailability()) {
           localServices = JSON.parse(localStorage.getItem('services') || '[]');
         } else {
@@ -113,28 +113,38 @@ export const useRecordsSync = () => {
             localServices = await db.getAll(STORE_NAME);
           }
         }
-        
-        const localOnlyServices = localServices.filter(
-          local => !cloudServices.some(cloud => cloud.id === local.id)
-        );
-        
-        const combinedServices = [...cloudServices, ...localOnlyServices];
-        
-        const saved = await saveToLocalStorage(combinedServices);
-        if (saved) {
-          setServices(combinedServices);
-          if (showNotification) {
-            toast.success('Registros actualizados desde la nube');
-          }
-        } else {
-          throw new Error('No se pudieron guardar los datos localmente');
-        }
+      } catch (localError) {
+        console.error('Error obteniendo servicios locales:', localError);
+        localServices = [];
       }
-    } catch (error) {
+      
+      // Filtrar servicios locales no sincronizados
+      const unsyncedServices = localServices.filter(
+        local => !cloudServices.some(cloud => cloud.id === local.id)
+      );
+      
+      // Combinar servicios de la nube con los no sincronizados
+      const combinedServices = [...cloudServices, ...unsyncedServices];
+      
+      // Guardar servicios combinados localmente
+      const saved = await saveToLocalStorage(combinedServices);
+      if (!saved) {
+        console.error('Error guardando servicios combinados localmente');
+        throw new Error('No se pudieron guardar los datos localmente');
+      }
+
+      // Actualizar estado
+      setServices(combinedServices);
+      
+      if (showNotification) {
+        toast.success(`${cloudServices.length} registro(s) actualizado(s) desde la nube`);
+      }
+    } catch (error: any) {
       console.error('Error al obtener servicios de la nube:', error);
       if (showNotification) {
-        toast.error('Error al actualizar desde la nube');
+        toast.error(`Error al actualizar desde la nube: ${error.message || 'Error desconocido'}`);
       }
+      throw error;
     }
   };
 

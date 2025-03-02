@@ -203,33 +203,37 @@ export const syncService = {
    */
   async fetchAllServices(): Promise<MarineService[]> {
     try {
-      const { data, error } = await supabase
+      const { data: services, error } = await supabase
         .from('marine_services')
         .select('*')
         .order('start_date_time', { ascending: false });
 
       if (error) {
         console.error('Error al obtener servicios de Supabase:', error);
+        throw new Error(`Error al obtener servicios: ${error.message}`);
+      }
+
+      if (!services) {
+        console.warn('No se encontraron servicios en Supabase');
         return [];
       }
 
       // Convertir datos a formato MarineService
-      return data.map(item => ({
+      return services.map(item => ({
         id: item.id,
         clientName: item.client_name,
         vesselName: item.vessel_name,
         startDateTime: item.start_date_time,
         details: item.details,
-        photoUrl: item.photo_url,
-        // Extract additional photos from metadata or use an empty array if not available
-        photoUrls: [],
+        photoUrl: item.photo_url || '',
+        photoUrls: item.photo_urls || [],
         createdAt: item.created_at,
         updatedAt: item.updated_at,
         synced: true
       }));
     } catch (error) {
       console.error('Error en el proceso de obtención de servicios:', error);
-      return [];
+      throw error;
     }
   },
 
