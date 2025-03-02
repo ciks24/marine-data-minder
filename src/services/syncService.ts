@@ -130,16 +130,22 @@ export const syncService = {
       // Recopilar todas las fotos para subir (solo las que son data URLs)
       const photosToUpload: string[] = [];
       
-      // Manejar las fotos múltiples
+      // Manejar las fotos múltiples, evitando duplicados
+      const existingPhotos = new Set<string>();
+      
       if (Array.isArray(service.photoUrls)) {
         service.photoUrls.forEach(url => {
-          if (url && typeof url === 'string' && url.startsWith('data:image')) {
-            photosToUpload.push(url);
+          if (url && typeof url === 'string') {
+            if (url.startsWith('data:image')) {
+              photosToUpload.push(url);
+            } else if (!existingPhotos.has(url)) {
+              existingPhotos.add(url);
+            }
           }
         });
       }
       
-      // Subir todas las fotos
+      // Subir todas las fotos nuevas
       let uploadedUrls: string[] = [];
       if (photosToUpload.length > 0) {
         try {
@@ -153,21 +159,9 @@ export const syncService = {
         }
       }
       
-      // Reemplazar las URLs de datos con las URLs subidas
-      let cloudPhotoUrl = service.photoUrl || '';
-      let cloudPhotoUrls = Array.isArray(service.photoUrls) ? [...service.photoUrls] : [];
+      // Combinar fotos existentes con las nuevas subidas
+      const finalPhotoUrls = [...existingPhotos, ...uploadedUrls];
       
-      // Reemplazar las fotos data:image con sus versiones subidas
-      if (uploadedUrls.length > 0) {
-        let uploadedIndex = 0;
-        cloudPhotoUrls = cloudPhotoUrls.map(url => {
-          if (url && url.startsWith('data:image')) {
-            return uploadedUrls[uploadedIndex++] || url;
-          }
-          return url;
-        });
-      }
-
       // Preparar el servicio para guardar
       const serviceToSave = {
         id: service.id,
@@ -175,8 +169,8 @@ export const syncService = {
         vessel_name: service.vesselName || '',
         start_date_time: service.startDateTime,
         details: service.details || '',
-        photo_url: cloudPhotoUrl,
-        photo_urls: cloudPhotoUrls,
+        photo_url: finalPhotoUrls[0] || '', // Primera foto como foto principal
+        photo_urls: finalPhotoUrls, // Todas las fotos en el array
         created_at: service.createdAt || service.startDateTime,
         updated_at: new Date().toISOString(),
         user_id: (await supabase.auth.getUser()).data.user?.id
