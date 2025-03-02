@@ -6,13 +6,14 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
-import { Camera, Save, X, Loader2, Calendar } from 'lucide-react';
+import { Camera, Save, X, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from './ui/dialog';
 
 interface ServiceFormProps {
@@ -20,15 +21,22 @@ interface ServiceFormProps {
   initialData?: ServiceFormData;
   isSubmitting?: boolean;
   isEditMode?: boolean;
+  disableDateTime?: boolean;
 }
 
-const ServiceForm = ({ onSubmit, initialData, isSubmitting = false, isEditMode = false }: ServiceFormProps) => {
+const ServiceForm = ({ 
+  onSubmit, 
+  initialData, 
+  isSubmitting = false, 
+  isEditMode = false,
+  disableDateTime = false
+}: ServiceFormProps) => {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   
   // Establecer fecha y hora actuales al iniciar el formulario (si es nuevo registro)
   useEffect(() => {
-    if (!isEditMode && !initialData) {
+    if (!isEditMode || !initialData) {
       const now = new Date();
       const localISOString = new Date(now.getTime() - (now.getTimezoneOffset() * 60000))
         .toISOString()
@@ -52,7 +60,7 @@ const ServiceForm = ({ onSubmit, initialData, isSubmitting = false, isEditMode =
 
   useEffect(() => {
     // Si hay una foto en los datos iniciales, establecerla como la seleccionada
-    if (initialData?.photoUrl && !selectedPhoto) {
+    if (initialData?.photoUrl) {
       setSelectedPhoto(initialData.photoUrl);
     }
   }, [initialData]);
@@ -73,15 +81,6 @@ const ServiceForm = ({ onSubmit, initialData, isSubmitting = false, isEditMode =
       data.photoUrl = selectedPhoto;
     }
     onSubmit(data);
-  };
-
-  const setCurrentDateTime = () => {
-    const now = new Date();
-    const localISOString = new Date(now.getTime() - (now.getTimezoneOffset() * 60000))
-      .toISOString()
-      .slice(0, 16); // Formato YYYY-MM-DDThh:mm para input datetime-local
-    
-    setValue('startDateTime', localISOString);
   };
 
   return (
@@ -117,25 +116,14 @@ const ServiceForm = ({ onSubmit, initialData, isSubmitting = false, isEditMode =
 
         <div>
           <Label htmlFor="startDateTime">Fecha y Hora de Inicio</Label>
-          <div className="flex space-x-2">
-            <Input
-              id="startDateTime"
-              type="datetime-local"
-              {...register('startDateTime', { required: 'Este campo es requerido' })}
-              className="form-input flex-1"
-              disabled={isSubmitting}
-            />
-            <Button 
-              type="button" 
-              variant="outline" 
-              size="icon" 
-              onClick={setCurrentDateTime}
-              className="h-9 w-9"
-              disabled={isSubmitting}
-            >
-              <Calendar className="h-4 w-4" />
-            </Button>
-          </div>
+          <Input
+            id="startDateTime"
+            type="datetime-local"
+            {...register('startDateTime', { required: 'Este campo es requerido' })}
+            className="form-input"
+            disabled={isSubmitting || disableDateTime}
+            readOnly={disableDateTime}
+          />
           {errors.startDateTime && (
             <p className="mt-1 text-sm text-red-600">{errors.startDateTime.message}</p>
           )}
@@ -212,27 +200,30 @@ const ServiceForm = ({ onSubmit, initialData, isSubmitting = false, isEditMode =
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>{isEditMode ? 'Editar Registro' : 'Previsualización del Registro'}</DialogTitle>
+            <DialogDescription>
+              Revisa la información antes de guardar
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 mt-4">
             <div>
-              <h3 className="font-medium text-gray-700">Cliente</h3>
+              <h3 className="font-medium text-gray-700 dark:text-gray-300">Cliente</h3>
               <p>{formData.clientName}</p>
             </div>
             <div>
-              <h3 className="font-medium text-gray-700">Embarcación</h3>
+              <h3 className="font-medium text-gray-700 dark:text-gray-300">Embarcación</h3>
               <p>{formData.vesselName}</p>
             </div>
             <div>
-              <h3 className="font-medium text-gray-700">Fecha y Hora</h3>
+              <h3 className="font-medium text-gray-700 dark:text-gray-300">Fecha y Hora</h3>
               <p>{new Date(formData.startDateTime).toLocaleString()}</p>
             </div>
             <div>
-              <h3 className="font-medium text-gray-700">Detalle</h3>
+              <h3 className="font-medium text-gray-700 dark:text-gray-300">Detalle</h3>
               <p className="whitespace-pre-wrap">{formData.details}</p>
             </div>
             {selectedPhoto && (
               <div>
-                <h3 className="font-medium text-gray-700">Foto</h3>
+                <h3 className="font-medium text-gray-700 dark:text-gray-300">Foto</h3>
                 <img
                   src={selectedPhoto}
                   alt="Preview"

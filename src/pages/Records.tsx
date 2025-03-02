@@ -13,6 +13,7 @@ const Records = () => {
     isOnline,
     editingService,
     isEditing,
+    isSubmitting,
     setIsEditing,
     setEditingService,
     syncServices,
@@ -57,7 +58,7 @@ const Records = () => {
         }}
         service={editingService}
         onUpdate={handleUpdate}
-        isSubmitting={isEditing}
+        isSubmitting={isSubmitting}
       />
     </div>
   );

@@ -11,6 +11,7 @@ export const useRecordsSync = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [editingService, setEditingService] = useState<MarineService | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const isOnline = useOnlineStatus();
   const { user } = useAuth();
 
@@ -106,7 +107,7 @@ export const useRecordsSync = () => {
     if (!editingService) return;
 
     try {
-      setIsEditing(true);
+      setIsSubmitting(true);
       
       const updatedService: MarineService = {
         ...editingService,
@@ -143,6 +144,7 @@ export const useRecordsSync = () => {
       toast.error('Error al actualizar el servicio');
       console.error('Error updating service:', error);
     } finally {
+      setIsSubmitting(false);
       setIsEditing(false);
     }
   };
@@ -193,6 +195,7 @@ export const useRecordsSync = () => {
     isOnline,
     editingService,
     isEditing,
+    isSubmitting,
     setIsEditing,
     setEditingService,
     syncServices,

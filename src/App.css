@@ -114,7 +114,12 @@
 }
 
 .dark .app-title {
-  text-shadow: 0 0 2px rgba(255,255,255,0.15);
+  background: linear-gradient(to right, var(--primary), var(--primary-foreground));
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  font-weight: 700;
+  text-shadow: 0 0 4px rgba(255,255,255,0.2);
 }
 
 /* Formato para fechas y horas */
