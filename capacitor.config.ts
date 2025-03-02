@@ -8,7 +8,7 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   server: {
     androidScheme: 'https',
-    url: isDevelopment ? 'http://10.0.2.2:8080' : 'https://marine-data-minder.netlify.app',
+    url: isDevelopment ? 'http://10.0.2.2:8080' : 'https://mscontrol.netlify.app',
     cleartext: isDevelopment
   },
   android: {
