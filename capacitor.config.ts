@@ -2,7 +2,7 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'mscontrol',
+  appId: 'app.lovable.e0e7ed6d5d3747c09e37f42cc250652c',
   appName: 'marine-data-minder',
   webDir: 'dist',
   server: {
