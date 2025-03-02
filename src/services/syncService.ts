@@ -149,7 +149,7 @@ export const syncService = {
         startDateTime: data.start_date_time,
         details: data.details,
         photoUrl: data.photo_url,
-        photoUrls: cloudPhotoUrls,
+        photoUrls: data.photo_urls,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
         synced: true

@@ -11,10 +11,44 @@ const Index = () => {
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Función para verificar el espacio disponible en localStorage
+  const checkStorageAvailability = () => {
+    try {
+      const testKey = '__storage_test__';
+      localStorage.setItem(testKey, testKey);
+      localStorage.removeItem(testKey);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  // Función para limpiar datos antiguos si es necesario
+  const cleanupOldData = () => {
+    try {
+      const services = JSON.parse(localStorage.getItem('services') || '[]');
+      // Mantener solo los últimos 50 registros si hay más
+      if (services.length > 50) {
+        const sortedServices = services.sort((a: MarineService, b: MarineService) => 
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        localStorage.setItem('services', JSON.stringify(sortedServices.slice(0, 50)));
+      }
+    } catch (e) {
+      console.error('Error limpiando datos antiguos:', e);
+    }
+  };
+
   const handleSubmit = async (data: ServiceFormData) => {
     try {
       setIsSubmitting(true);
-      
+
+      // Verificar disponibilidad de localStorage
+      if (!checkStorageAvailability()) {
+        toast.error('No hay espacio de almacenamiento disponible');
+        return;
+      }
+
       // Crear nuevo servicio con los datos del formulario
       const newService: MarineService = {
         ...data,
@@ -26,12 +60,24 @@ const Index = () => {
 
       // Guardar en almacenamiento local
       try {
+        // Intentar limpiar datos antiguos primero
+        cleanupOldData();
+
+        // Intentar guardar el nuevo servicio
         const services = JSON.parse(localStorage.getItem('services') || '[]');
         services.push(newService);
-        localStorage.setItem('services', JSON.stringify(services));
+        const servicesString = JSON.stringify(services);
+
+        try {
+          localStorage.setItem('services', servicesString);
+        } catch (storageError) {
+          // Si falla, intentar limpiar más datos y reintentar
+          cleanupOldData();
+          localStorage.setItem('services', servicesString);
+        }
       } catch (localError) {
         console.error('Error guardando en localStorage:', localError);
-        toast.error('Error al guardar localmente. Verifique el espacio disponible.');
+        toast.error('Error al guardar. Intente limpiar el caché de la aplicación.');
         return;
       }
 
