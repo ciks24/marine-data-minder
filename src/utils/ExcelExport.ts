@@ -1,31 +1,55 @@
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { MarineService } from '@/types/service';
 
 type ExportTimeRange = 'today' | 'week' | 'month' | 'all' | 'selected' | 'byClient';
 
-export const exportToExcel = (services: MarineService[], timeRange: ExportTimeRange = 'all', selectedIds: string[] = []) => {
+export const exportToExcel = async (services: MarineService[], timeRange: ExportTimeRange = 'all', selectedIds: string[] = []) => {
   // Filter services based on time range
   const filtered = filterServicesByTimeRange(services, timeRange, selectedIds);
   
   if (filtered.length === 0) {
     throw new Error('No hay registros para exportar en el rango seleccionado');
   }
-  
-  // Convert data to workbook format
-  const worksheetData = filtered.map(service => ({
-    'Nombre de Cliente': service.clientName,
-    'Embarcación': service.vesselName,
-    'Fecha y Hora': new Date(service.startDateTime).toLocaleString('es-ES'),
-    'Detalle': service.details,
-    'Cantidad de Fotos': getPhotosCount(service),
-    'Enlaces a Fotos': getPhotoLinks(service).join(', ')
-  }));
-  
-  // Create worksheet
-  const worksheet = XLSX.utils.json_to_sheet(worksheetData);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Registros');
-  
+
+  // Create a new workbook and worksheet
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('Registros');
+
+  // Define columns
+  worksheet.columns = [
+    { header: 'Nombre de Cliente', key: 'clientName', width: 30 },
+    { header: 'Embarcación', key: 'vesselName', width: 30 },
+    { header: 'Fecha y Hora', key: 'startDateTime', width: 20 },
+    { header: 'Detalle', key: 'details', width: 50 },
+    { header: 'Cantidad de Fotos', key: 'photosCount', width: 15 },
+    { header: 'Enlaces a Fotos', key: 'photoLinks', width: 50 }
+  ];
+
+  // Add style to header row
+  worksheet.getRow(1).font = { bold: true };
+  worksheet.getRow(1).fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FFE0E0E0' }
+  };
+
+  // Add data
+  filtered.forEach(service => {
+    worksheet.addRow({
+      clientName: service.clientName,
+      vesselName: service.vesselName,
+      startDateTime: new Date(service.startDateTime).toLocaleString('es-ES'),
+      details: service.details,
+      photosCount: getPhotosCount(service),
+      photoLinks: getPhotoLinks(service).join(', ')
+    });
+  });
+
+  // Auto-fit columns
+  worksheet.columns.forEach(column => {
+    if (column.width && column.width < 12) column.width = 12;
+  });
+
   // Generate filename based on time range
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
   let filename = `registros_servicios_${timestamp}`;
@@ -35,9 +59,16 @@ export const exportToExcel = (services: MarineService[], timeRange: ExportTimeRa
   } else if (timeRange === 'byClient' && filtered.length > 0) {
     filename = `registros_cliente_${filtered[0].clientName}_${timestamp}`;
   }
-  
-  // Download the Excel file
-  XLSX.writeFile(workbook, `${filename}.xlsx`);
+
+  // Write to file
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${filename}.xlsx`;
+  a.click();
+  window.URL.revokeObjectURL(url);
 };
 
 const filterServicesByTimeRange = (
