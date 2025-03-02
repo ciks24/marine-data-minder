@@ -61,11 +61,26 @@ export const useRecordsSync = () => {
 
     setIsSyncing(true);
     try {
-      const syncedServices = await syncService.syncAllServices(services);
-      setServices(syncedServices);
+      // Obtener servicios locales no sincronizados
+      const localServices = JSON.parse(localStorage.getItem('services') || '[]');
+      const unsyncedServices = localServices.filter(service => !service.synced);
       
-      await fetchServicesFromCloud(false);
-      toast.success('Registros sincronizados exitosamente');
+      if (unsyncedServices.length === 0) {
+        toast.info('No hay registros pendientes para sincronizar');
+        return;
+      }
+
+      // Sincronizar servicios no sincronizados
+      const syncedServices = await syncService.syncAllServices(unsyncedServices);
+      
+      // Obtener servicios desde la nube
+      const cloudServices = await syncService.fetchAllServices();
+      
+      // Limpiar localStorage y guardar solo los servicios de la nube
+      localStorage.setItem('services', JSON.stringify(cloudServices));
+      setServices(cloudServices);
+      
+      toast.success(`${unsyncedServices.length} registro(s) sincronizado(s) exitosamente`);
     } catch (error) {
       console.error('Error durante la sincronización:', error);
       toast.error('Error al sincronizar. Intente nuevamente');

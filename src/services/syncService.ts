@@ -168,37 +168,32 @@ export const syncService = {
    */
   async syncAllServices(services: MarineService[]): Promise<MarineService[]> {
     try {
-      const unsyncedServices = services.filter(service => !service.synced);
-      
-      if (unsyncedServices.length === 0) {
-        return services; // Nada que sincronizar
+      if (services.length === 0) {
+        return [];
       }
 
       // Sincronizar cada servicio no sincronizado
-      const syncPromises = unsyncedServices.map(service => this.saveService(service));
+      const syncPromises = services.map(service => this.saveService(service));
       const syncedResults = await Promise.allSettled(syncPromises);
       
-      // Actualizar la lista local con los resultados
-      const updatedServices = [...services];
-      
+      // Recopilar los resultados exitosos
+      const successfulSyncs = syncedResults
+        .filter((result): result is PromiseFulfilledResult<MarineService> => 
+          result.status === 'fulfilled' && result.value !== null
+        )
+        .map(result => result.value);
+
+      // Registrar errores si los hay
       syncedResults.forEach((result, index) => {
-        if (result.status === 'fulfilled' && result.value) {
-          // Encontrar y actualizar el servicio en la lista local
-          const serviceIndex = updatedServices.findIndex(s => s.id === unsyncedServices[index].id);
-          if (serviceIndex >= 0) {
-            updatedServices[serviceIndex] = result.value;
-          }
+        if (result.status === 'rejected') {
+          console.error(`Error sincronizando servicio ${services[index].id}:`, result.reason);
         }
       });
 
-      // Actualizar localStorage
-      localStorage.setItem('services', JSON.stringify(updatedServices));
-      
-      // Retornar la lista actualizada
-      return updatedServices;
+      return successfulSyncs;
     } catch (error) {
       console.error('Error al sincronizar servicios:', error);
-      return services; // Devolver la lista original en caso de error
+      throw error;
     }
   },
 
