@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { MarineService, ServiceFormData } from '@/types/service';
 import { syncService, useOnlineStatus } from '@/services/syncService';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from './useAuth';
 import { openDB } from 'idb';
+import { checkSupabaseConnection } from '@/integrations/supabase/client';
+import { fetchAllServices, saveService } from '@/services/syncService';
 
 // Configuración de IndexedDB
 const DB_NAME = 'marine-data-minder-v3';
@@ -200,85 +202,120 @@ const loadFromLocalDB = async (): Promise<MarineService[]> => {
 };
 
 export const useRecordsSync = () => {
+  const { user } = useAuth();
+  const isOnline = useOnlineStatus();
   const [services, setServices] = useState<MarineService[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [hasOfflineChanges, setHasOfflineChanges] = useState(false);
   const [editingService, setEditingService] = useState<MarineService | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [hasOfflineChanges, setHasOfflineChanges] = useState(false);
-  const isOnline = useOnlineStatus();
-  const { user } = useAuth();
 
-  // Efecto para detectar cuando se recupera la conexión
-  useEffect(() => {
-    if (isOnline && hasOfflineChanges && user) {
-      syncOfflineChanges();
+  // Cargar datos iniciales
+  const loadInitialData = useCallback(async () => {
+    if (!user?.id) {
+      console.log('No hay usuario autenticado');
+      setLoading(false);
+      return;
     }
-  }, [isOnline, hasOfflineChanges, user]);
 
-  // Cargar datos al inicio
-  useEffect(() => {
-    const loadInitialData = async () => {
-      try {
-        if (isOnline && user) {
-          // Si hay conexión, cargar directamente desde Supabase
-          const cloudServices = await syncService.fetchAllServices();
-          setServices(cloudServices);
-        } else {
-          // Sin conexión, cargar desde local
-          const localServices = await loadFromLocalDB();
-          setServices(localServices);
-          if (localServices.some(service => !service.synced)) {
-            setHasOfflineChanges(true);
-          }
-        }
-      } catch (error) {
-        console.error('Error cargando datos iniciales:', error);
-        // Si falla la carga desde Supabase, intentar cargar local
-        const localServices = await loadFromLocalDB();
-        setServices(localServices);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    setLoading(true);
+    setError(null);
+    console.log('Cargando datos iniciales. Online:', isOnline);
 
-    if (user) {
-      loadInitialData();
-    }
-  }, [user, isOnline]);
-
-  const syncOfflineChanges = async () => {
-    if (!isOnline || !user) return;
-
-    setIsSyncing(true);
     try {
-      // Obtener servicios no sincronizados
-      const localServices = await loadFromLocalDB();
-      const unsynced = localServices.filter(service => !service.synced);
+      // Intentar cargar datos locales primero
+      const localData = localStorage.getItem(`marine-services-${user.id}`);
+      const localServices = localData ? JSON.parse(localData) : [];
       
-      if (unsynced.length === 0) {
-        setHasOfflineChanges(false);
-        return;
+      if (isOnline) {
+        // Si estamos online, intentar obtener datos de Supabase
+        const isConnected = await checkSupabaseConnection();
+        if (isConnected) {
+          console.log('Obteniendo datos de Supabase...');
+          const supabaseServices = await syncService.fetchAllServices();
+          console.log(`${supabaseServices.length} registros obtenidos de Supabase`);
+          
+          // Comparar datos locales con Supabase para detectar cambios sin sincronizar
+          const hasUnsyncedChanges = localServices.some(local => {
+            const remote = supabaseServices.find(r => r.id === local.id);
+            return !remote || local.updatedAt > remote.updatedAt;
+          });
+          
+          setHasOfflineChanges(hasUnsyncedChanges);
+          setServices(supabaseServices);
+          
+          // Actualizar cache local
+          localStorage.setItem(`marine-services-${user.id}`, JSON.stringify(supabaseServices));
+        } else {
+          console.log('No se pudo conectar a Supabase, usando datos locales');
+          setServices(localServices);
+        }
+      } else {
+        console.log('Modo offline, usando datos locales');
+        setServices(localServices);
       }
+    } catch (err) {
+      console.error('Error cargando datos:', err);
+      setError('Error al cargar los datos. Por favor intente nuevamente.');
+      // Intentar usar datos locales como fallback
+      const localData = localStorage.getItem(`marine-services-${user.id}`);
+      if (localData) {
+        setServices(JSON.parse(localData));
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id, isOnline]);
 
-      // Sincronizar cada servicio no sincronizado
-      const syncedServices = await syncService.syncAllServices(unsynced);
+  // Sincronizar cambios cuando se recupera la conexión
+  useEffect(() => {
+    if (isOnline && hasOfflineChanges) {
+      console.log('Conexión recuperada, sincronizando cambios pendientes...');
+      syncChanges();
+    }
+  }, [isOnline]);
+
+  // Cargar datos iniciales
+  useEffect(() => {
+    loadInitialData();
+  }, [loadInitialData]);
+
+  // Función para sincronizar cambios
+  const syncChanges = async () => {
+    if (!user?.id || !isOnline) return;
+    
+    setSyncing(true);
+    try {
+      const localData = localStorage.getItem(`marine-services-${user.id}`);
+      const localServices = localData ? JSON.parse(localData) : [];
       
-      // Actualizar la lista completa de servicios desde Supabase
-      const allServices = await syncService.fetchAllServices();
-      setServices(allServices);
+      console.log('Iniciando sincronización de cambios...');
+      const supabaseServices = await syncService.fetchAllServices();
       
-      // Actualizar almacenamiento local
-      await saveToLocalDB(allServices);
+      // Identificar y sincronizar cambios locales
+      for (const localService of localServices) {
+        const remoteService = supabaseServices.find(r => r.id === localService.id);
+        if (!remoteService || localService.updatedAt > remoteService.updatedAt) {
+          console.log(`Sincronizando servicio ${localService.id}...`);
+          await syncService.saveService(localService);
+        }
+      }
+      
+      // Actualizar datos locales con los últimos de Supabase
+      const updatedServices = await syncService.fetchAllServices();
+      setServices(updatedServices);
+      localStorage.setItem(`marine-services-${user.id}`, JSON.stringify(updatedServices));
       setHasOfflineChanges(false);
       
-      toast.success('Cambios sincronizados correctamente');
-    } catch (error) {
-      console.error('Error sincronizando cambios offline:', error);
-      toast.error('Error al sincronizar cambios offline');
+      console.log('Sincronización completada exitosamente');
+    } catch (err) {
+      console.error('Error durante la sincronización:', err);
+      setError('Error al sincronizar los cambios. Por favor intente nuevamente.');
     } finally {
-      setIsSyncing(false);
+      setSyncing(false);
     }
   };
 
@@ -354,35 +391,57 @@ export const useRecordsSync = () => {
       return;
     }
     
-    setIsLoading(true);
+    if (!user) {
+      toast.error('Usuario no autenticado');
+      return;
+    }
+    
+    setLoading(true);
     try {
+      console.log('Actualizando datos desde Supabase...');
       const cloudServices = await syncService.fetchAllServices();
+      console.log('Datos actualizados recibidos:', cloudServices.length, 'registros');
+      
       setServices(cloudServices);
       await saveToLocalDB(cloudServices);
       toast.success('Datos actualizados correctamente');
     } catch (error) {
       console.error('Error al actualizar datos:', error);
       toast.error('Error al actualizar datos');
+      
+      // Intentar cargar datos locales como fallback
+      try {
+        const localServices = await loadFromLocalDB();
+        setServices(localServices);
+        toast.warning('Mostrando datos locales');
+      } catch (localError) {
+        console.error('Error cargando datos locales:', localError);
+      }
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   return {
     services,
-    isSyncing,
-    isLoading,
+    loading,
+    error,
+    syncing,
+    hasOfflineChanges,
+    isSyncing: syncing,
+    isLoading: loading,
     isOnline,
     editingService,
     isEditing,
     isSubmitting,
-    hasOfflineChanges,
     setIsEditing,
     setEditingService,
     syncServices: refreshServices,
     refreshServices,
     handleEdit,
     handleUpdate,
-    handleDelete
+    handleDelete,
+    syncChanges,
+    loadInitialData
   };
 };

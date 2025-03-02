@@ -288,15 +288,17 @@ export const syncService = {
    */
   async fetchAllServices(): Promise<MarineService[]> {
     try {
-      const { data: user } = await supabase.auth.getUser();
-      if (!user.user) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
         throw new Error('Usuario no autenticado');
       }
+
+      console.log('Obteniendo servicios para usuario:', user.id);
 
       const { data, error } = await supabase
         .from('marine_services')
         .select('*')
-        .eq('user_id', user.user.id)
+        .eq('user_id', user.id)
         .order('updated_at', { ascending: false });
 
       if (error) {
@@ -304,12 +306,15 @@ export const syncService = {
         throw new Error(`Error al obtener servicios: ${error.message}`);
       }
 
-      if (!data || !Array.isArray(data)) {
-        throw new Error('No se recibieron datos válidos del servidor');
+      console.log('Servicios obtenidos de Supabase:', data);
+
+      if (!data) {
+        console.warn('No se recibieron datos del servidor');
+        return [];
       }
 
       // Convertir y validar los datos
-      return data.map(item => {
+      const validatedServices = data.map(item => {
         if (!item.id || !item.start_date_time) {
           console.warn('Servicio con datos incompletos:', item);
         }
@@ -327,6 +332,9 @@ export const syncService = {
           synced: true
         };
       });
+
+      console.log('Servicios procesados:', validatedServices);
+      return validatedServices;
     } catch (error: any) {
       console.error('Error en fetchAllServices:', error);
       throw new Error(`Error al sincronizar con el servidor: ${error.message}`);

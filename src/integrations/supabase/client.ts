@@ -16,17 +16,45 @@ export const supabase = createClient<Database>(
       persistSession: true,
       storageKey: 'marine-data-auth',
       autoRefreshToken: true,
-      detectSessionInUrl: true
+      detectSessionInUrl: true,
+      flowType: 'pkce'
     },
     global: {
       headers: {
         'X-Client-Info': 'marine-data-minder-android'
+      },
+      fetch: (url, options = {}) => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 segundos timeout
+
+        return fetch(url, {
+          ...options,
+          signal: controller.signal
+        }).finally(() => {
+          clearTimeout(timeoutId);
+        });
       }
     },
     realtime: {
       params: {
         eventsPerSecond: 2
       }
+    },
+    db: {
+      schema: 'public'
     }
   }
 );
+
+// Función auxiliar para verificar la conexión
+export const checkSupabaseConnection = async () => {
+  try {
+    const { data, error } = await supabase.from('marine_services').select('count').limit(1);
+    if (error) throw error;
+    console.log('Conexión a Supabase exitosa');
+    return true;
+  } catch (error) {
+    console.error('Error al verificar la conexión con Supabase:', error);
+    return false;
+  }
+};
