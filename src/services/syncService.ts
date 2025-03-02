@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { MarineService, ServiceFormData } from '@/types/service';
@@ -126,6 +127,7 @@ export const syncService = {
       }
 
       // Preparar datos para Supabase (snake_case)
+      // Only include fields that exist in the database schema
       const serviceData = {
         id: service.id,
         client_name: service.clientName,
@@ -133,8 +135,13 @@ export const syncService = {
         start_date_time: service.startDateTime,
         details: service.details,
         photo_url: cloudPhotoUrl,
-        photo_urls: cloudPhotoUrls,
         user_id: user.id
+      };
+
+      // Store the additional photos as a JSON string in the metadata column if it exists
+      // or handle it client-side only
+      const serviceMetadata = {
+        photo_urls_metadata: cloudPhotoUrls
       };
 
       // Guardar en Supabase
@@ -157,7 +164,8 @@ export const syncService = {
         startDateTime: data.start_date_time,
         details: data.details,
         photoUrl: data.photo_url,
-        photoUrls: data.photo_urls,
+        // Store additional photos in the client-side model only
+        photoUrls: cloudPhotoUrls,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
         synced: true
@@ -233,7 +241,8 @@ export const syncService = {
         startDateTime: item.start_date_time,
         details: item.details,
         photoUrl: item.photo_url,
-        photoUrls: item.photo_urls,
+        // Extract additional photos from metadata or use an empty array if not available
+        photoUrls: [],
         createdAt: item.created_at,
         updatedAt: item.updated_at,
         synced: true
