@@ -12,6 +12,7 @@ interface RecordsHeaderProps {
   isOnline: boolean;
   services?: MarineService[];
   onSync?: () => void;
+  hasOfflineChanges?: boolean;
 }
 
 const RecordsHeader: React.FC<RecordsHeaderProps> = ({
@@ -21,7 +22,8 @@ const RecordsHeader: React.FC<RecordsHeaderProps> = ({
   isSyncing = false,
   isOnline,
   services = [],
-  onSync
+  onSync,
+  hasOfflineChanges = false
 }) => {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   
@@ -39,10 +41,15 @@ const RecordsHeader: React.FC<RecordsHeaderProps> = ({
             if (onSync) await onSync();
           }}
           disabled={!isOnline || isLoading}
-          className="h-9"
+          className={`h-9 ${hasOfflineChanges ? 'border-yellow-500 hover:border-yellow-600' : ''}`}
         >
-          <RefreshCw className={`h-4 w-4 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
-          <span className="hidden xs:inline">Sincronizar</span>
+          <RefreshCw className={`h-4 w-4 mr-1 ${isLoading ? 'animate-spin' : ''} ${hasOfflineChanges ? 'text-yellow-500' : ''}`} />
+          <span className="hidden xs:inline">
+            {hasOfflineChanges ? 'Sincronizar cambios' : 'Sincronizar'}
+          </span>
+          {hasOfflineChanges && !isOnline && (
+            <span className="ml-1 bg-yellow-500 text-white text-xs px-1 rounded">!</span>
+          )}
         </Button>
 
         <Button

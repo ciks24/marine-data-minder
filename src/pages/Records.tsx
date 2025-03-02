@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useRecordsSync } from '@/hooks/useRecordsSync';
 import RecordCard from '@/components/records/RecordCard';
@@ -14,6 +13,7 @@ const Records = () => {
     editingService,
     isEditing,
     isSubmitting,
+    hasOfflineChanges,
     setIsEditing,
     setEditingService,
     syncServices,
@@ -32,6 +32,7 @@ const Records = () => {
         onRefresh={refreshServices}
         onSync={syncServices}
         services={services}
+        hasOfflineChanges={hasOfflineChanges}
       />
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
