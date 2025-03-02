@@ -88,7 +88,15 @@ export const syncService = {
       // Subir todas las fotos
       let uploadedUrls: string[] = [];
       if (photosToUpload.length > 0) {
-        uploadedUrls = await this.uploadMultiplePhotos(photosToUpload);
+        try {
+          uploadedUrls = await this.uploadMultiplePhotos(photosToUpload);
+          if (uploadedUrls.length !== photosToUpload.length) {
+            throw new Error('No se pudieron subir todas las fotos');
+          }
+        } catch (photoError: any) {
+          console.error('Error subiendo fotos:', photoError);
+          throw new Error(`Error al subir las fotos: ${photoError.message}`);
+        }
       }
       
       // Reemplazar las URLs de datos con las URLs subidas
@@ -97,54 +105,44 @@ export const syncService = {
       
       // Reemplazar las fotos data:image con sus versiones subidas
       if (service.photoUrls && service.photoUrls.length > 0) {
+        let uploadedIndex = 0;
         cloudPhotoUrls = service.photoUrls.map(url => {
           if (url.startsWith('data:image')) {
-            const uploadedIndex = photosToUpload.indexOf(url);
-            if (uploadedIndex >= 0 && uploadedUrls[uploadedIndex]) {
-              return uploadedUrls[uploadedIndex];
-            }
+            return uploadedUrls[uploadedIndex++] || url;
           }
           return url;
         });
       }
 
-      // Para compatibilidad con versiones anteriores, usar la primera foto como principal
-      if (cloudPhotoUrls.length > 0 && (!cloudPhotoUrl || cloudPhotoUrl === '')) {
-        cloudPhotoUrl = cloudPhotoUrls[0];
-      }
-
-      // Obtener el usuario actual
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        throw new Error('Usuario no autenticado');
-      }
-
-      // Preparar datos para Supabase (snake_case)
-      const serviceData = {
+      // Preparar el servicio para guardar
+      const serviceToSave = {
         id: service.id,
         client_name: service.clientName,
         vessel_name: service.vesselName,
         start_date_time: service.startDateTime,
         details: service.details,
-        photo_url: cloudPhotoUrl,
-        user_id: user.id
+        photo_url: cloudPhotoUrl || '',
+        photo_urls: cloudPhotoUrls,
+        synced: true,
+        created_at: service.createdAt,
+        updated_at: new Date().toISOString(),
+        user_id: (await supabase.auth.getUser()).data.user?.id
       };
 
-      // Guardar el servicio en Supabase
+      // Guardar en Supabase
       const { data, error } = await supabase
         .from('marine_services')
-        .upsert(serviceData, { onConflict: 'id' })
+        .upsert(serviceToSave)
         .select()
         .single();
 
       if (error) {
-        console.error('Error al guardar el servicio en Supabase:', error);
-        return null;
+        console.error('Error guardando en Supabase:', error);
+        throw new Error(`Error al guardar en la base de datos: ${error.message}`);
       }
 
-      // Guardar las URLs adicionales en metadatos (en localStorage para mantener todas las fotos)
-      const localService: MarineService = {
+      // Convertir la respuesta al formato MarineService
+      const savedService: MarineService = {
         id: data.id,
         clientName: data.client_name,
         vesselName: data.vessel_name,
@@ -157,17 +155,10 @@ export const syncService = {
         synced: true
       };
 
-      // Actualizar los servicios en localStorage
-      const services = JSON.parse(localStorage.getItem('services') || '[]');
-      const updatedServices = services.map((s: MarineService) => 
-        s.id === localService.id ? localService : s
-      );
-      localStorage.setItem('services', JSON.stringify(updatedServices));
-
-      return localService;
-    } catch (error) {
-      console.error('Error en el proceso de guardado del servicio:', error);
-      return null;
+      return savedService;
+    } catch (error: any) {
+      console.error('Error en saveService:', error);
+      throw error;
     }
   },
 

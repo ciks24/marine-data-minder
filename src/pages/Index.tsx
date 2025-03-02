@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -26,32 +25,45 @@ const Index = () => {
       };
 
       // Guardar en almacenamiento local
-      const services = JSON.parse(localStorage.getItem('services') || '[]');
-      services.push(newService);
-      localStorage.setItem('services', JSON.stringify(services));
+      try {
+        const services = JSON.parse(localStorage.getItem('services') || '[]');
+        services.push(newService);
+        localStorage.setItem('services', JSON.stringify(services));
+      } catch (localError) {
+        console.error('Error guardando en localStorage:', localError);
+        toast.error('Error al guardar localmente. Verifique el espacio disponible.');
+        return;
+      }
 
       // Intentar sincronizar con Supabase si hay conexión
       if (navigator.onLine && user) {
-        const syncedService = await syncService.saveService(newService);
-        
-        if (syncedService) {
-          // Actualizar el servicio en localStorage con la versión sincronizada
-          const updatedServices = services.map(s => 
-            s.id === syncedService.id ? syncedService : s
-          );
-          localStorage.setItem('services', JSON.stringify(updatedServices));
-          toast.success('Servicio registrado y sincronizado exitosamente');
-        } else {
-          toast.warning('Servicio guardado localmente, pero no se pudo sincronizar');
+        try {
+          const syncedService = await syncService.saveService(newService);
+          
+          if (syncedService) {
+            // Actualizar el servicio en localStorage con la versión sincronizada
+            const services = JSON.parse(localStorage.getItem('services') || '[]');
+            const updatedServices = services.map(s => 
+              s.id === syncedService.id ? syncedService : s
+            );
+            localStorage.setItem('services', JSON.stringify(updatedServices));
+            toast.success('Servicio registrado y sincronizado exitosamente');
+          } else {
+            toast.warning('Servicio guardado localmente, pero no se pudo sincronizar');
+          }
+        } catch (syncError: any) {
+          console.error('Error sincronizando con Supabase:', syncError);
+          toast.error(`Error al sincronizar: ${syncError.message || 'Error desconocido'}`);
+          return;
         }
       } else {
         toast.info('Servicio guardado localmente. Se sincronizará cuando haya conexión');
       }
 
       navigate('/records');
-    } catch (error) {
-      toast.error('Error al guardar el servicio');
-      console.error('Error saving service:', error);
+    } catch (error: any) {
+      console.error('Error general guardando servicio:', error);
+      toast.error(`Error al guardar el servicio: ${error.message || 'Error desconocido'}`);
     } finally {
       setIsSubmitting(false);
     }
