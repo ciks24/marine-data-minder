@@ -1,5 +1,11 @@
 apply plugin: 'com.android.application'
 
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
     namespace "app.lovable.e0e7ed6d5d3747c09e37f42cc250652c"
     compileSdk rootProject.ext.compileSdkVersion
@@ -16,9 +22,20 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            keyAlias keystoreProperties.getProperty('keyAlias', 'marine-data-minder')
+            keyPassword keystoreProperties.getProperty('keyPassword', System.getenv("KEY_PASSWORD"))
+            storeFile keystoreProperties.getProperty('storeFile') ? 
+                file(keystoreProperties.getProperty('storeFile')) : 
+                file("keystore/marine-data-minder.keystore")
+            storePassword keystoreProperties.getProperty('storePassword', System.getenv("KEYSTORE_PASSWORD"))
+        }
+    }
     buildTypes {
         release {
-            minifyEnabled false
+            signingConfig signingConfigs.release
+            minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
