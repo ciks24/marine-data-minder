@@ -43,14 +43,15 @@ const RecordCard: React.FC<RecordCardProps> = ({ service, onEdit, onDelete }) =>
   
   const formatDateTime = (dateTimeStr: string) => {
     const date = new Date(dateTimeStr);
-    // Ajustar a la zona horaria local sin modificar la hora
+    // Usar la fecha directamente sin ajustes de zona horaria
     return date.toLocaleString('es-ES', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
-      hour12: false
+      hour12: false,
+      timeZone: 'UTC'  // Usar UTC para evitar ajustes automáticos
     });
   };
 

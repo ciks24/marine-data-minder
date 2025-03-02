@@ -50,14 +50,26 @@ const ServiceForm = ({
   useEffect(() => {
     if (!isEditMode) {
       const now = new Date();
-      // Guardar la fecha y hora actual sin ajustes de zona horaria
-      const localISOString = now.toISOString().slice(0, 16);
-      setValue('startDateTime', localISOString);
+      // Convertir a formato local considerando la zona horaria
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      
+      const localDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+      setValue('startDateTime', localDateTime);
     } else if (initialData?.startDateTime) {
-      // Para modo edición, mantener la fecha original
+      // Para modo edición, convertir la fecha almacenada a formato local
       const date = new Date(initialData.startDateTime);
-      const localISOString = date.toISOString().slice(0, 16);
-      setValue('startDateTime', localISOString);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      
+      const localDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+      setValue('startDateTime', localDateTime);
     }
   }, [isEditMode, initialData, setValue]);
   
@@ -114,14 +126,22 @@ const ServiceForm = ({
   };
 
   const handleFormSubmit = (data: ServiceFormData) => {
+    // Asegurar que la fecha se guarde en formato ISO con la zona horaria correcta
+    const dateTime = new Date(data.startDateTime);
+    const isoString = dateTime.toISOString();
+    
     // Filter out photos marked for removal
     const updatedPhotos = selectedPhotos.filter((_, index) => !photosToRemove.includes(index));
     
     // Handle backward compatibility for single photo
-    data.photoUrl = updatedPhotos.length > 0 ? updatedPhotos[0] : '';
-    data.photoUrls = updatedPhotos;
+    const formData = {
+      ...data,
+      startDateTime: isoString,
+      photoUrl: updatedPhotos.length > 0 ? updatedPhotos[0] : '',
+      photoUrls: updatedPhotos
+    };
     
-    onSubmit(data);
+    onSubmit(formData);
   };
 
   const handleRemovePhoto = (indexToRemove: number) => {
@@ -310,7 +330,14 @@ const ServiceForm = ({
             </div>
             <div>
               <h3 className="font-medium text-gray-700 dark:text-gray-300">Fecha y Hora</h3>
-              <p>{new Date(formData.startDateTime).toLocaleString()}</p>
+              <p>{new Date(formData.startDateTime).toLocaleString('es-ES', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+              })}</p>
             </div>
             <div>
               <h3 className="font-medium text-gray-700 dark:text-gray-300">Detalle</h3>
