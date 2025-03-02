@@ -78,17 +78,45 @@ export const useRecordsSync = () => {
 
   const saveToLocalStorage = async (updatedServices: MarineService[]) => {
     try {
+      // Asegurarse de que los servicios tengan la estructura correcta
+      const validatedServices = updatedServices.map(service => ({
+        id: service.id,
+        clientName: service.clientName || '',
+        vesselName: service.vesselName || '',
+        startDateTime: service.startDateTime || new Date().toISOString(),
+        details: service.details || '',
+        photoUrl: service.photoUrl || '',
+        photoUrls: Array.isArray(service.photoUrls) ? service.photoUrls : [],
+        createdAt: service.createdAt || new Date().toISOString(),
+        updatedAt: service.updatedAt || new Date().toISOString(),
+        synced: Boolean(service.synced)
+      }));
+
       if (checkStorageAvailability()) {
-        localStorage.setItem('services', JSON.stringify(updatedServices));
+        localStorage.setItem('services', JSON.stringify(validatedServices));
         return true;
       } else {
         const db = await initDB();
-        if (!db) return false;
+        if (!db) {
+          console.error('No se pudo inicializar IndexedDB');
+          return false;
+        }
 
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        await tx.store.clear();
-        await Promise.all(updatedServices.map(service => tx.store.put(service)));
-        return true;
+        try {
+          const tx = db.transaction(STORE_NAME, 'readwrite');
+          await tx.store.clear();
+          
+          // Guardar servicios uno por uno para mejor manejo de errores
+          for (const service of validatedServices) {
+            await tx.store.add(service);
+          }
+          
+          await tx.done;
+          return true;
+        } catch (txError) {
+          console.error('Error en la transacción de IndexedDB:', txError);
+          return false;
+        }
       }
     } catch (error) {
       console.error('Error guardando datos localmente:', error);
@@ -101,6 +129,7 @@ export const useRecordsSync = () => {
 
     try {
       const cloudServices = await syncService.fetchAllServices();
+      console.log('Servicios obtenidos de la nube:', cloudServices);
       
       // Obtener servicios locales
       let localServices: MarineService[] = [];
@@ -113,6 +142,7 @@ export const useRecordsSync = () => {
             localServices = await db.getAll(STORE_NAME);
           }
         }
+        console.log('Servicios locales obtenidos:', localServices);
       } catch (localError) {
         console.error('Error obteniendo servicios locales:', localError);
         localServices = [];
@@ -120,11 +150,13 @@ export const useRecordsSync = () => {
       
       // Filtrar servicios locales no sincronizados
       const unsyncedServices = localServices.filter(
-        local => !cloudServices.some(cloud => cloud.id === local.id)
+        local => !cloudServices.some(cloud => cloud.id === local.id) && !local.synced
       );
+      console.log('Servicios no sincronizados:', unsyncedServices);
       
       // Combinar servicios de la nube con los no sincronizados
       const combinedServices = [...cloudServices, ...unsyncedServices];
+      console.log('Servicios combinados:', combinedServices);
       
       // Guardar servicios combinados localmente
       const saved = await saveToLocalStorage(combinedServices);
@@ -137,14 +169,17 @@ export const useRecordsSync = () => {
       setServices(combinedServices);
       
       if (showNotification) {
-        toast.success(`${cloudServices.length} registro(s) actualizado(s) desde la nube`);
+        const message = unsyncedServices.length > 0 
+          ? `${cloudServices.length} registros actualizados y ${unsyncedServices.length} pendientes de sincronizar`
+          : `${cloudServices.length} registros actualizados desde la nube`;
+        toast.success(message);
       }
     } catch (error: any) {
       console.error('Error al obtener servicios de la nube:', error);
       if (showNotification) {
-        toast.error(`Error al actualizar desde la nube: ${error.message || 'Error desconocido'}`);
+        const errorMessage = error.message || 'Error desconocido';
+        toast.error(`Error al actualizar desde la nube: ${errorMessage}`);
       }
-      throw error;
     }
   };
 

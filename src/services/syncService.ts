@@ -73,13 +73,18 @@ export const syncService = {
    */
   async saveService(service: MarineService): Promise<MarineService | null> {
     try {
+      // Validar datos requeridos
+      if (!service.id || !service.startDateTime) {
+        throw new Error('Datos de servicio incompletos');
+      }
+
       // Recopilar todas las fotos para subir (solo las que son data URLs)
       const photosToUpload: string[] = [];
       
       // Manejar las fotos múltiples
-      if (service.photoUrls && service.photoUrls.length > 0) {
+      if (Array.isArray(service.photoUrls)) {
         service.photoUrls.forEach(url => {
-          if (url.startsWith('data:image')) {
+          if (url && typeof url === 'string' && url.startsWith('data:image')) {
             photosToUpload.push(url);
           }
         });
@@ -91,23 +96,23 @@ export const syncService = {
         try {
           uploadedUrls = await this.uploadMultiplePhotos(photosToUpload);
           if (uploadedUrls.length !== photosToUpload.length) {
-            throw new Error('No se pudieron subir todas las fotos');
+            console.warn('Algunas fotos no se pudieron subir');
           }
         } catch (photoError: any) {
           console.error('Error subiendo fotos:', photoError);
-          throw new Error(`Error al subir las fotos: ${photoError.message}`);
+          // Continuar con el guardado aunque fallen las fotos
         }
       }
       
       // Reemplazar las URLs de datos con las URLs subidas
-      let cloudPhotoUrl = service.photoUrl;
-      let cloudPhotoUrls = [...(service.photoUrls || [])];
+      let cloudPhotoUrl = service.photoUrl || '';
+      let cloudPhotoUrls = Array.isArray(service.photoUrls) ? [...service.photoUrls] : [];
       
       // Reemplazar las fotos data:image con sus versiones subidas
-      if (service.photoUrls && service.photoUrls.length > 0) {
+      if (uploadedUrls.length > 0) {
         let uploadedIndex = 0;
-        cloudPhotoUrls = service.photoUrls.map(url => {
-          if (url.startsWith('data:image')) {
+        cloudPhotoUrls = cloudPhotoUrls.map(url => {
+          if (url && url.startsWith('data:image')) {
             return uploadedUrls[uploadedIndex++] || url;
           }
           return url;
@@ -117,13 +122,13 @@ export const syncService = {
       // Preparar el servicio para guardar
       const serviceToSave = {
         id: service.id,
-        client_name: service.clientName,
-        vessel_name: service.vesselName,
+        client_name: service.clientName || '',
+        vessel_name: service.vesselName || '',
         start_date_time: service.startDateTime,
-        details: service.details,
-        photo_url: cloudPhotoUrl || '',
+        details: service.details || '',
+        photo_url: cloudPhotoUrl,
         photo_urls: cloudPhotoUrls,
-        created_at: service.createdAt,
+        created_at: service.createdAt || service.startDateTime,
         updated_at: new Date().toISOString(),
         user_id: (await supabase.auth.getUser()).data.user?.id
       };
@@ -140,21 +145,23 @@ export const syncService = {
         throw new Error(`Error al guardar en la base de datos: ${error.message}`);
       }
 
+      if (!data) {
+        throw new Error('No se recibieron datos después de guardar');
+      }
+
       // Convertir la respuesta al formato MarineService
-      const savedService: MarineService = {
+      return {
         id: data.id,
-        clientName: data.client_name,
-        vesselName: data.vessel_name,
+        clientName: data.client_name || '',
+        vesselName: data.vessel_name || '',
         startDateTime: data.start_date_time,
-        details: data.details,
-        photoUrl: data.photo_url,
-        photoUrls: data.photo_urls,
-        createdAt: data.created_at,
-        updatedAt: data.updated_at,
+        details: data.details || '',
+        photoUrl: data.photo_url || '',
+        photoUrls: Array.isArray(data.photo_urls) ? data.photo_urls : [],
+        createdAt: data.created_at || data.start_date_time,
+        updatedAt: data.updated_at || data.start_date_time,
         synced: true
       };
-
-      return savedService;
     } catch (error: any) {
       console.error('Error en saveService:', error);
       throw error;
@@ -213,24 +220,38 @@ export const syncService = {
         throw new Error(`Error al obtener servicios: ${error.message}`);
       }
 
-      if (!services) {
-        console.warn('No se encontraron servicios en Supabase');
+      if (!services || !Array.isArray(services)) {
+        console.warn('No se encontraron servicios en Supabase o formato inválido');
         return [];
       }
 
-      // Convertir datos a formato MarineService
-      return services.map(item => ({
-        id: item.id,
-        clientName: item.client_name,
-        vesselName: item.vessel_name,
-        startDateTime: item.start_date_time,
-        details: item.details,
-        photoUrl: item.photo_url || '',
-        photoUrls: item.photo_urls || [],
-        createdAt: item.created_at,
-        updatedAt: item.updated_at,
-        synced: true
-      }));
+      // Convertir y validar datos a formato MarineService
+      return services.map(item => {
+        // Asegurarse de que todos los campos requeridos existan
+        if (!item.id || !item.start_date_time) {
+          console.warn('Servicio con datos incompletos:', item);
+          return null;
+        }
+
+        try {
+          return {
+            id: item.id,
+            clientName: item.client_name || '',
+            vesselName: item.vessel_name || '',
+            startDateTime: item.start_date_time,
+            details: item.details || '',
+            photoUrl: item.photo_url || '',
+            // Asegurarse de que photo_urls sea un array
+            photoUrls: Array.isArray(item.photo_urls) ? item.photo_urls : [],
+            createdAt: item.created_at || item.start_date_time,
+            updatedAt: item.updated_at || item.start_date_time,
+            synced: true
+          };
+        } catch (error) {
+          console.error('Error procesando servicio:', error);
+          return null;
+        }
+      }).filter((service): service is MarineService => service !== null);
     } catch (error) {
       console.error('Error en el proceso de obtención de servicios:', error);
       throw error;
