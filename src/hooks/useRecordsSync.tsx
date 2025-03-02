@@ -140,12 +140,12 @@ export const useRecordsSync = () => {
       }
 
       setEditingService(null);
+      setIsEditing(false);
     } catch (error) {
       toast.error('Error al actualizar el servicio');
       console.error('Error updating service:', error);
     } finally {
       setIsSubmitting(false);
-      setIsEditing(false);
     }
   };
 

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { MarineService, ServiceFormData } from '@/types/service';
@@ -62,7 +61,10 @@ export const syncService = {
       // Si la foto es un dataURL, subirla primero
       let cloudPhotoUrl = service.photoUrl;
       if (service.photoUrl && service.photoUrl.startsWith('data:image')) {
-        cloudPhotoUrl = await this.uploadPhoto(service.photoUrl);
+        const uploadedUrl = await this.uploadPhoto(service.photoUrl);
+        if (uploadedUrl) {
+          cloudPhotoUrl = uploadedUrl;
+        }
       }
 
       // Obtener el usuario actual

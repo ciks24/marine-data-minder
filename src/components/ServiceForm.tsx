@@ -6,7 +6,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
-import { Camera, Save, X, Loader2 } from 'lucide-react';
+import { Camera, Save, X, Loader2, Trash2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -33,10 +33,11 @@ const ServiceForm = ({
 }: ServiceFormProps) => {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+  const [removePhoto, setRemovePhoto] = useState(false);
   
   // Establecer fecha y hora actuales al iniciar el formulario (si es nuevo registro)
   useEffect(() => {
-    if (!isEditMode || !initialData) {
+    if (!isEditMode) {
       const now = new Date();
       const localISOString = new Date(now.getTime() - (now.getTimezoneOffset() * 60000))
         .toISOString()
@@ -71,16 +72,24 @@ const ServiceForm = ({
       const reader = new FileReader();
       reader.onloadend = () => {
         setSelectedPhoto(reader.result as string);
+        setRemovePhoto(false);
       };
       reader.readAsDataURL(file);
     }
   };
 
   const handleFormSubmit = (data: ServiceFormData) => {
-    if (selectedPhoto) {
+    if (removePhoto) {
+      data.photoUrl = '';
+    } else if (selectedPhoto) {
       data.photoUrl = selectedPhoto;
     }
     onSubmit(data);
+  };
+
+  const handleRemovePhoto = () => {
+    setSelectedPhoto(null);
+    setRemovePhoto(true);
   };
 
   return (
@@ -121,8 +130,8 @@ const ServiceForm = ({
             type="datetime-local"
             {...register('startDateTime', { required: 'Este campo es requerido' })}
             className="form-input"
-            disabled={isSubmitting || disableDateTime}
-            readOnly={disableDateTime}
+            disabled={true}
+            readOnly={true}
           />
           {errors.startDateTime && (
             <p className="mt-1 text-sm text-red-600">{errors.startDateTime.message}</p>
@@ -167,6 +176,19 @@ const ServiceForm = ({
               onChange={handlePhotoChange}
               disabled={isSubmitting}
             />
+            
+            {selectedPhoto && (
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleRemovePhoto}
+                className="flex items-center space-x-2"
+                disabled={isSubmitting}
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Eliminar Foto</span>
+              </Button>
+            )}
           </div>
           {selectedPhoto && (
             <div className="mt-4">
@@ -176,6 +198,9 @@ const ServiceForm = ({
                 className="w-full max-w-md rounded-lg shadow-sm"
               />
             </div>
+          )}
+          {removePhoto && (
+            <p className="mt-2 text-amber-600 dark:text-amber-400">La foto será eliminada al guardar.</p>
           )}
         </div>
       </div>
@@ -197,9 +222,9 @@ const ServiceForm = ({
       </div>
 
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{isEditMode ? 'Editar Registro' : 'Previsualización del Registro'}</DialogTitle>
+            <DialogTitle className="app-title">{isEditMode ? 'Editar Registro' : 'Nuevo Registro de Servicio'}</DialogTitle>
             <DialogDescription>
               Revisa la información antes de guardar
             </DialogDescription>
@@ -221,7 +246,7 @@ const ServiceForm = ({
               <h3 className="font-medium text-gray-700 dark:text-gray-300">Detalle</h3>
               <p className="whitespace-pre-wrap">{formData.details}</p>
             </div>
-            {selectedPhoto && (
+            {selectedPhoto && !removePhoto && (
               <div>
                 <h3 className="font-medium text-gray-700 dark:text-gray-300">Foto</h3>
                 <img
@@ -229,6 +254,12 @@ const ServiceForm = ({
                   alt="Preview"
                   className="mt-2 w-full max-w-md rounded-lg shadow-sm"
                 />
+              </div>
+            )}
+            {removePhoto && (
+              <div>
+                <h3 className="font-medium text-gray-700 dark:text-gray-300">Foto</h3>
+                <p className="text-amber-600 dark:text-amber-400">La foto será eliminada</p>
               </div>
             )}
           </div>

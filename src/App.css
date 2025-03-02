@@ -106,7 +106,7 @@
 
 /* Título con mejor visibilidad en ambos modos */
 .app-title {
-  background: linear-gradient(to right, var(--primary), var(--primary-foreground));
+  background: linear-gradient(to right, #3b82f6, #2563eb);
   background-clip: text;
   -webkit-background-clip: text;
   color: transparent;
@@ -114,12 +114,12 @@
 }
 
 .dark .app-title {
-  background: linear-gradient(to right, var(--primary), var(--primary-foreground));
+  background: linear-gradient(to right, #60a5fa, #93c5fd);
   background-clip: text;
   -webkit-background-clip: text;
   color: transparent;
   font-weight: 700;
-  text-shadow: 0 0 4px rgba(255,255,255,0.2);
+  text-shadow: 0 0 4px rgba(96, 165, 250, 0.3);
 }
 
 /* Formato para fechas y horas */

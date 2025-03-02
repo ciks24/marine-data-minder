@@ -28,9 +28,9 @@ const EditServiceDialog: React.FC<EditServiceDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-xl text-foreground">Editar Registro</DialogTitle>
+          <DialogTitle className="text-xl app-title">Editar Registro</DialogTitle>
         </DialogHeader>
         
         <ServiceForm 
@@ -39,7 +39,7 @@ const EditServiceDialog: React.FC<EditServiceDialogProps> = ({
             vesselName: service.vesselName,
             startDateTime: service.startDateTime,
             details: service.details,
-            photoUrl: service.photoUrl
+            photoUrl: service.photoUrl || ''
           }}
           onSubmit={onUpdate}
           isSubmitting={isSubmitting}
