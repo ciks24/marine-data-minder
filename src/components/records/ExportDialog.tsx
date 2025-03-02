@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MarineService } from '@/types/service';
 import { exportToExcel } from '@/utils/ExcelExport';
 import { toast } from 'sonner';
@@ -15,6 +15,13 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Download, X } from 'lucide-react';
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 
 interface ExportDialogProps {
   open: boolean;
@@ -27,13 +34,35 @@ const ExportDialog: React.FC<ExportDialogProps> = ({
   onOpenChange,
   services
 }) => {
-  const [timeRange, setTimeRange] = useState<'today' | 'week' | 'month' | 'all'>('today');
+  const [exportOption, setExportOption] = useState<'today' | 'byClient'>('today');
+  const [selectedClient, setSelectedClient] = useState<string>('');
   const [isExporting, setIsExporting] = useState(false);
+  const [clientList, setClientList] = useState<string[]>([]);
+
+  // Extraer lista única de clientes
+  useEffect(() => {
+    if (services.length > 0) {
+      const uniqueClients = Array.from(new Set(services.map(s => s.clientName)));
+      setClientList(uniqueClients.sort());
+      // Seleccionar el primer cliente por defecto
+      if (uniqueClients.length > 0 && !selectedClient) {
+        setSelectedClient(uniqueClients[0]);
+      }
+    }
+  }, [services]);
 
   const handleExport = async () => {
     try {
       setIsExporting(true);
-      await exportToExcel(services, timeRange);
+      
+      if (exportOption === 'today') {
+        await exportToExcel(services, 'today');
+      } else if (exportOption === 'byClient' && selectedClient) {
+        // Filtrar servicios por cliente seleccionado
+        const filteredServices = services.filter(s => s.clientName === selectedClient);
+        await exportToExcel(filteredServices, 'all', []);
+      }
+      
       toast.success('Registros exportados exitosamente');
       onOpenChange(false);
     } catch (error) {
@@ -50,15 +79,15 @@ const ExportDialog: React.FC<ExportDialogProps> = ({
         <DialogHeader>
           <DialogTitle className="app-title">Exportar Registros</DialogTitle>
           <DialogDescription>
-            Selecciona el rango de tiempo para exportar los registros a Excel
+            Selecciona cómo deseas exportar los registros
           </DialogDescription>
         </DialogHeader>
         
         <div className="py-4">
           <RadioGroup 
             defaultValue="today" 
-            value={timeRange}
-            onValueChange={(value) => setTimeRange(value as any)}
+            value={exportOption}
+            onValueChange={(value) => setExportOption(value as 'today' | 'byClient')}
             className="space-y-3"
           >
             <div className="flex items-center space-x-2">
@@ -66,18 +95,32 @@ const ExportDialog: React.FC<ExportDialogProps> = ({
               <Label htmlFor="today">Registros de hoy</Label>
             </div>
             <div className="flex items-center space-x-2">
-              <RadioGroupItem value="week" id="week" />
-              <Label htmlFor="week">Registros de la última semana</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="month" id="month" />
-              <Label htmlFor="month">Registros del último mes</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="all" id="all" />
-              <Label htmlFor="all">Todos los registros</Label>
+              <RadioGroupItem value="byClient" id="byClient" />
+              <Label htmlFor="byClient">Registros por cliente</Label>
             </div>
           </RadioGroup>
+          
+          {exportOption === 'byClient' && (
+            <div className="mt-4">
+              <Label htmlFor="clientSelect">Selecciona un cliente</Label>
+              <Select
+                value={selectedClient}
+                onValueChange={setSelectedClient}
+                disabled={clientList.length === 0}
+              >
+                <SelectTrigger id="clientSelect" className="w-full mt-1">
+                  <SelectValue placeholder="Selecciona un cliente" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clientList.map(client => (
+                    <SelectItem key={client} value={client}>
+                      {client}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
         
         <DialogFooter className="flex justify-end space-x-2">
@@ -91,7 +134,7 @@ const ExportDialog: React.FC<ExportDialogProps> = ({
           </Button>
           <Button 
             onClick={handleExport}
-            disabled={isExporting}
+            disabled={isExporting || (exportOption === 'byClient' && !selectedClient)}
           >
             <Download className="w-4 h-4 mr-2" />
             {isExporting ? 'Exportando...' : 'Exportar'}

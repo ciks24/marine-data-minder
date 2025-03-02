@@ -17,12 +17,14 @@ export const useRecordsSync = () => {
   const isOnline = useOnlineStatus();
   const { user } = useAuth();
 
+  // Cargar datos locales
   useEffect(() => {
     const loadedServices = JSON.parse(localStorage.getItem('services') || '[]');
     setServices(loadedServices);
     setIsLoading(false);
   }, []);
 
+  // Configurar canal de cambios de Supabase
   useEffect(() => {
     if (!user) return;
 
@@ -48,9 +50,9 @@ export const useRecordsSync = () => {
     };
   }, [user, isOnline]);
 
+  // Sincronizar cuando se detecta conexión
   useEffect(() => {
     if (isOnline && user && !isLoading) {
-      toast.info('Conexión a Internet detectada. Sincronizando datos...');
       syncServices();
     }
   }, [isOnline, user]);
@@ -160,34 +162,14 @@ export const useRecordsSync = () => {
     try {
       setIsSubmitting(true);
       
-      let photoUrl = editingService.photoUrl;
-      
-      // Manejar la imagen si es una nueva
-      if (updatedData.photoUrl && updatedData.photoUrl !== editingService.photoUrl) {
-        if (updatedData.photoUrl.startsWith('data:')) {
-          // Es una nueva imagen en formato data URI
-          const fileBlob = dataURItoBlob(updatedData.photoUrl);
-          if (fileBlob) {
-            const uploadedUrl = await uploadImageToSupabase(fileBlob);
-            if (uploadedUrl) {
-              photoUrl = uploadedUrl;
-            }
-          }
-        } else {
-          // Ya es una URL a una imagen existente
-          photoUrl = updatedData.photoUrl;
-        }
-      } else if (updatedData.photoUrl === '') {
-        // Se eliminó la imagen
-        photoUrl = '';
-      }
-      
+      // Mantener la lista de fotos existentes (photoUrls)
       const updatedService: MarineService = {
         ...editingService,
         clientName: updatedData.clientName,
         vesselName: updatedData.vesselName,
         details: updatedData.details,
-        photoUrl: photoUrl,
+        photoUrl: updatedData.photoUrl,
+        photoUrls: updatedData.photoUrls || [],
         updatedAt: new Date().toISOString(),
         synced: false
       };
@@ -207,12 +189,8 @@ export const useRecordsSync = () => {
           );
           localStorage.setItem('services', JSON.stringify(newServices));
           setServices(newServices);
-          toast.success('Servicio actualizado y sincronizado exitosamente');
-        } else {
-          toast.warning('Servicio actualizado localmente, pero no se pudo sincronizar');
+          toast.success('Servicio actualizado exitosamente');
         }
-      } else {
-        toast.info('Servicio actualizado localmente. Se sincronizará cuando haya conexión');
       }
 
       setEditingService(null);
@@ -238,8 +216,6 @@ export const useRecordsSync = () => {
         } else {
           toast.success('Registro eliminado completamente');
         }
-      } else {
-        toast.info('Registro eliminado localmente. Se actualizará en la nube al reconectar');
       }
     } catch (error) {
       console.error('Error al eliminar:', error);

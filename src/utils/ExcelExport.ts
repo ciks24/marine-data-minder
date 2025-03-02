@@ -1,8 +1,7 @@
-
 import * as XLSX from 'xlsx';
 import { MarineService } from '@/types/service';
 
-type ExportTimeRange = 'today' | 'week' | 'month' | 'all' | 'selected';
+type ExportTimeRange = 'today' | 'week' | 'month' | 'all' | 'selected' | 'byClient';
 
 export const exportToExcel = (services: MarineService[], timeRange: ExportTimeRange = 'all', selectedIds: string[] = []) => {
   // Filter services based on time range
@@ -33,12 +32,8 @@ export const exportToExcel = (services: MarineService[], timeRange: ExportTimeRa
   
   if (timeRange === 'today') {
     filename = `registros_hoy_${timestamp}`;
-  } else if (timeRange === 'week') {
-    filename = `registros_semana_${timestamp}`;
-  } else if (timeRange === 'month') {
-    filename = `registros_mes_${timestamp}`;
-  } else if (timeRange === 'selected') {
-    filename = `registros_seleccionados_${timestamp}`;
+  } else if (timeRange === 'byClient' && filtered.length > 0) {
+    filename = `registros_cliente_${filtered[0].clientName}_${timestamp}`;
   }
   
   // Download the Excel file

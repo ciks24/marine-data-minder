@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { MarineService, ServiceFormData } from '@/types/service';
@@ -74,49 +73,44 @@ export const syncService = {
    */
   async saveService(service: MarineService): Promise<MarineService | null> {
     try {
-      // Collect all photos to upload
+      // Recopilar todas las fotos para subir (solo las que son data URLs)
       const photosToUpload: string[] = [];
       
-      // Legacy single photo handling
-      if (service.photoUrl && service.photoUrl.startsWith('data:image')) {
-        photosToUpload.push(service.photoUrl);
-      }
-      
-      // Multiple photos handling
+      // Manejar las fotos múltiples
       if (service.photoUrls && service.photoUrls.length > 0) {
         service.photoUrls.forEach(url => {
-          if (url.startsWith('data:image') && !photosToUpload.includes(url)) {
+          if (url.startsWith('data:image')) {
             photosToUpload.push(url);
           }
         });
       }
       
-      // Upload all photos
+      // Subir todas las fotos
       let uploadedUrls: string[] = [];
       if (photosToUpload.length > 0) {
         uploadedUrls = await this.uploadMultiplePhotos(photosToUpload);
       }
       
-      // Replace data URLs with uploaded URLs
+      // Reemplazar las URLs de datos con las URLs subidas
       let cloudPhotoUrl = service.photoUrl;
-      let cloudPhotoUrls = service.photoUrls ? [...service.photoUrls] : [];
+      let cloudPhotoUrls = [...(service.photoUrls || [])];
       
-      if (service.photoUrl && service.photoUrl.startsWith('data:image')) {
-        // Replace the main photo URL with its uploaded version if it exists
-        const uploadedMainPhotoIndex = photosToUpload.indexOf(service.photoUrl);
-        if (uploadedMainPhotoIndex >= 0 && uploadedUrls[uploadedMainPhotoIndex]) {
-          cloudPhotoUrl = uploadedUrls[uploadedMainPhotoIndex];
-        }
-      }
-      
+      // Reemplazar las fotos data:image con sus versiones subidas
       if (service.photoUrls && service.photoUrls.length > 0) {
         cloudPhotoUrls = service.photoUrls.map(url => {
           if (url.startsWith('data:image')) {
             const uploadedIndex = photosToUpload.indexOf(url);
-            return uploadedIndex >= 0 && uploadedUrls[uploadedIndex] ? uploadedUrls[uploadedIndex] : url;
+            if (uploadedIndex >= 0 && uploadedUrls[uploadedIndex]) {
+              return uploadedUrls[uploadedIndex];
+            }
           }
           return url;
         });
+      }
+
+      // Para compatibilidad con versiones anteriores, usar la primera foto como principal
+      if (cloudPhotoUrls.length > 0 && (!cloudPhotoUrl || cloudPhotoUrl === '')) {
+        cloudPhotoUrl = cloudPhotoUrls[0];
       }
 
       // Obtener el usuario actual
@@ -127,7 +121,6 @@ export const syncService = {
       }
 
       // Preparar datos para Supabase (snake_case)
-      // Only include fields that exist in the database schema
       const serviceData = {
         id: service.id,
         client_name: service.clientName,
@@ -138,13 +131,7 @@ export const syncService = {
         user_id: user.id
       };
 
-      // Store the additional photos as a JSON string in the metadata column if it exists
-      // or handle it client-side only
-      const serviceMetadata = {
-        photo_urls_metadata: cloudPhotoUrls
-      };
-
-      // Guardar en Supabase
+      // Guardar el servicio en Supabase
       const { data, error } = await supabase
         .from('marine_services')
         .upsert(serviceData, { onConflict: 'id' })
@@ -156,20 +143,28 @@ export const syncService = {
         return null;
       }
 
-      // Convertir respuesta a formato MarineService
-      return {
+      // Guardar las URLs adicionales en metadatos (en localStorage para mantener todas las fotos)
+      const localService: MarineService = {
         id: data.id,
         clientName: data.client_name,
         vesselName: data.vessel_name,
         startDateTime: data.start_date_time,
         details: data.details,
         photoUrl: data.photo_url,
-        // Store additional photos in the client-side model only
         photoUrls: cloudPhotoUrls,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
         synced: true
       };
+
+      // Actualizar los servicios en localStorage
+      const services = JSON.parse(localStorage.getItem('services') || '[]');
+      const updatedServices = services.map((s: MarineService) => 
+        s.id === localService.id ? localService : s
+      );
+      localStorage.setItem('services', JSON.stringify(updatedServices));
+
+      return localService;
     } catch (error) {
       console.error('Error en el proceso de guardado del servicio:', error);
       return null;

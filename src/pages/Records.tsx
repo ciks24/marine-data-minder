@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { useRecordsSync } from '@/hooks/useRecordsSync';
 import RecordCard from '@/components/records/RecordCard';
 import RecordsHeader from '@/components/records/RecordsHeader';
@@ -22,15 +22,6 @@ const Records = () => {
     handleUpdate,
     handleDelete
   } = useRecordsSync();
-  
-  const [filterValue, setFilterValue] = useState('');
-  
-  const filteredServices = filterValue 
-    ? services.filter(service => 
-        service.clientName.toLowerCase().includes(filterValue.toLowerCase()) ||
-        service.vesselName.toLowerCase().includes(filterValue.toLowerCase())
-      )
-    : services;
 
   return (
     <div className="space-y-6">
@@ -40,14 +31,11 @@ const Records = () => {
         isRefreshing={isLoading}
         onRefresh={refreshServices}
         onSync={syncServices}
-        filterValue={filterValue}
-        onFilterChange={setFilterValue}
-        onClearFilter={() => setFilterValue('')}
         services={services}
       />
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {filteredServices.map((service) => (
+        {services.map((service) => (
           <RecordCard 
             key={service.id}
             service={service}
@@ -57,12 +45,10 @@ const Records = () => {
         ))}
       </div>
 
-      {filteredServices.length === 0 && (
+      {services.length === 0 && (
         <div className="text-center py-12">
           <p className="text-muted-foreground">
-            {filterValue 
-              ? "No se encontraron resultados para tu búsqueda" 
-              : "No hay registros disponibles"}
+            No hay registros disponibles
           </p>
         </div>
       )}

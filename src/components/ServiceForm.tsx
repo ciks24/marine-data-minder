@@ -6,7 +6,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
-import { Camera, Save, X, Loader2, Trash2, Plus, Download } from 'lucide-react';
+import { Camera, Save, X, Loader2, Image, Plus } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -85,7 +85,7 @@ const ServiceForm = ({
     }
   }, [initialData]);
 
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleGalleryPhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
@@ -94,6 +94,18 @@ const ServiceForm = ({
         setSelectedPhotos(prev => [...prev, photoUrl]);
         // Remove from removal list if re-added
         setPhotosToRemove(prev => prev.filter(index => index >= selectedPhotos.length));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleCameraPhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const photoUrl = reader.result as string;
+        setSelectedPhotos(prev => [...prev, photoUrl]);
       };
       reader.readAsDataURL(file);
     }
@@ -188,8 +200,8 @@ const ServiceForm = ({
               className="flex items-center space-x-2"
               disabled={isSubmitting}
             >
-              <Plus className="w-4 h-4" />
-              <span>Agregar Foto</span>
+              <Image className="w-4 h-4 mr-2" />
+              <span>Seleccionar de Galería</span>
             </Button>
             
             <Button
@@ -199,7 +211,7 @@ const ServiceForm = ({
               className="flex items-center space-x-2"
               disabled={isSubmitting}
             >
-              <Camera className="w-4 h-4" />
+              <Camera className="w-4 h-4 mr-2" />
               <span>Tomar Foto</span>
             </Button>
 
@@ -208,7 +220,7 @@ const ServiceForm = ({
               type="file"
               accept="image/*"
               className="hidden"
-              onChange={handlePhotoChange}
+              onChange={handleGalleryPhotoSelect}
               disabled={isSubmitting}
             />
             
@@ -218,7 +230,7 @@ const ServiceForm = ({
               accept="image/*"
               capture="environment"
               className="hidden"
-              onChange={handlePhotoChange}
+              onChange={handleCameraPhotoCapture}
               disabled={isSubmitting}
             />
           </div>
@@ -323,10 +335,10 @@ const ServiceForm = ({
               </div>
             )}
           </div>
-          <DialogFooter className="flex justify-end space-x-4 mt-6">
+          <DialogFooter className="flex justify-between mt-6">
             <Button variant="outline" onClick={() => setPreviewOpen(false)} disabled={isSubmitting}>
               <X className="w-4 h-4 mr-2" />
-              Cerrar
+              Cancelar
             </Button>
             <Button 
               onClick={() => {
