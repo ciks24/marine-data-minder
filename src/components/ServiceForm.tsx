@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { ServiceFormData } from '../types/service';
@@ -36,18 +35,6 @@ const ServiceForm = ({
   const [selectedPhotos, setSelectedPhotos] = useState<string[]>([]);
   const [photosToRemove, setPhotosToRemove] = useState<number[]>([]);
   
-  // Establecer fecha y hora actuales al iniciar el formulario (si es nuevo registro)
-  useEffect(() => {
-    if (!isEditMode) {
-      const now = new Date();
-      const localISOString = new Date(now.getTime() - (now.getTimezoneOffset() * 60000))
-        .toISOString()
-        .slice(0, 16); // Formato YYYY-MM-DDThh:mm para input datetime-local
-      
-      setValue('startDateTime', localISOString);
-    }
-  }, [isEditMode]);
-  
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<ServiceFormData>({
     defaultValues: initialData || {
       clientName: '',
@@ -59,6 +46,23 @@ const ServiceForm = ({
     },
   });
 
+  // Establecer fecha y hora actuales al iniciar el formulario (si es nuevo registro)
+  useEffect(() => {
+    if (!isEditMode) {
+      const now = new Date();
+      // Asegurar que la fecha se guarde con la zona horaria local correcta
+      const localDate = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
+      const localISOString = localDate.toISOString().slice(0, 16);
+      setValue('startDateTime', localISOString);
+    } else if (initialData?.startDateTime) {
+      // Para modo edición, convertir la fecha almacenada a formato local
+      const storedDate = new Date(initialData.startDateTime);
+      const localDate = new Date(storedDate.getTime() - (storedDate.getTimezoneOffset() * 60000));
+      const localISOString = localDate.toISOString().slice(0, 16);
+      setValue('startDateTime', localISOString);
+    }
+  }, [isEditMode, initialData, setValue]);
+  
   const formData = watch();
 
   useEffect(() => {

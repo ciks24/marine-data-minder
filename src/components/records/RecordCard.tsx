@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Edit2, Trash2, Image } from 'lucide-react';
 import { 
@@ -44,7 +43,9 @@ const RecordCard: React.FC<RecordCardProps> = ({ service, onEdit, onDelete }) =>
   
   const formatDateTime = (dateTimeStr: string) => {
     const date = new Date(dateTimeStr);
-    return date.toLocaleString('es-ES', {
+    // Ajustar a la zona horaria local
+    const localDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60000));
+    return localDate.toLocaleString('es-ES', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
