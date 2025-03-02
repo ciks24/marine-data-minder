@@ -5,7 +5,8 @@ export interface MarineService {
   vesselName: string;
   startDateTime: string;
   details: string;
-  photoUrl?: string;
+  photoUrl?: string; // Keep for backward compatibility
+  photoUrls?: string[]; // New field for multiple photos
   createdAt: string;
   updatedAt: string;
   synced: boolean;

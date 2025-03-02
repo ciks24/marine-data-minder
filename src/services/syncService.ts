@@ -52,19 +52,70 @@ export const syncService = {
   },
 
   /**
+   * Sube múltiples imágenes al almacenamiento de Supabase
+   * @param photoUrls - Array de URLs de datos de las imágenes (dataURL)
+   * @returns Array de URLs públicas de las imágenes almacenadas
+   */
+  async uploadMultiplePhotos(photoUrls: string[]): Promise<string[]> {
+    if (!photoUrls || photoUrls.length === 0) return [];
+    
+    const uploadPromises = photoUrls.map(url => this.uploadPhoto(url));
+    const results = await Promise.all(uploadPromises);
+    
+    // Filter out any null results
+    return results.filter(url => url !== null) as string[];
+  },
+
+  /**
    * Guarda un servicio en Supabase
    * @param service - El servicio a guardar
    * @returns El servicio guardado con datos actualizados
    */
   async saveService(service: MarineService): Promise<MarineService | null> {
     try {
-      // Si la foto es un dataURL, subirla primero
-      let cloudPhotoUrl = service.photoUrl;
+      // Collect all photos to upload
+      const photosToUpload: string[] = [];
+      
+      // Legacy single photo handling
       if (service.photoUrl && service.photoUrl.startsWith('data:image')) {
-        const uploadedUrl = await this.uploadPhoto(service.photoUrl);
-        if (uploadedUrl) {
-          cloudPhotoUrl = uploadedUrl;
+        photosToUpload.push(service.photoUrl);
+      }
+      
+      // Multiple photos handling
+      if (service.photoUrls && service.photoUrls.length > 0) {
+        service.photoUrls.forEach(url => {
+          if (url.startsWith('data:image') && !photosToUpload.includes(url)) {
+            photosToUpload.push(url);
+          }
+        });
+      }
+      
+      // Upload all photos
+      let uploadedUrls: string[] = [];
+      if (photosToUpload.length > 0) {
+        uploadedUrls = await this.uploadMultiplePhotos(photosToUpload);
+      }
+      
+      // Replace data URLs with uploaded URLs
+      let cloudPhotoUrl = service.photoUrl;
+      let cloudPhotoUrls = service.photoUrls ? [...service.photoUrls] : [];
+      
+      if (service.photoUrl && service.photoUrl.startsWith('data:image')) {
+        // Replace the main photo URL with its uploaded version if it exists
+        const uploadedMainPhotoIndex = photosToUpload.indexOf(service.photoUrl);
+        if (uploadedMainPhotoIndex >= 0 && uploadedUrls[uploadedMainPhotoIndex]) {
+          cloudPhotoUrl = uploadedUrls[uploadedMainPhotoIndex];
         }
+      }
+      
+      if (service.photoUrls && service.photoUrls.length > 0) {
+        cloudPhotoUrls = service.photoUrls.map(url => {
+          if (url.startsWith('data:image')) {
+            const uploadedIndex = photosToUpload.indexOf(url);
+            return uploadedIndex >= 0 && uploadedUrls[uploadedIndex] ? uploadedUrls[uploadedIndex] : url;
+          }
+          return url;
+        });
       }
 
       // Obtener el usuario actual
@@ -82,6 +133,7 @@ export const syncService = {
         start_date_time: service.startDateTime,
         details: service.details,
         photo_url: cloudPhotoUrl,
+        photo_urls: cloudPhotoUrls,
         user_id: user.id
       };
 
@@ -105,6 +157,7 @@ export const syncService = {
         startDateTime: data.start_date_time,
         details: data.details,
         photoUrl: data.photo_url,
+        photoUrls: data.photo_urls,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
         synced: true
@@ -180,6 +233,7 @@ export const syncService = {
         startDateTime: item.start_date_time,
         details: item.details,
         photoUrl: item.photo_url,
+        photoUrls: item.photo_urls,
         createdAt: item.created_at,
         updatedAt: item.updated_at,
         synced: true

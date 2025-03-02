@@ -6,7 +6,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
-import { Camera, Save, X, Loader2, Trash2 } from 'lucide-react';
+import { Camera, Save, X, Loader2, Trash2, Plus, Download } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -33,8 +33,8 @@ const ServiceForm = ({
   disableDateTime = false
 }: ServiceFormProps) => {
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
-  const [removePhoto, setRemovePhoto] = useState(false);
+  const [selectedPhotos, setSelectedPhotos] = useState<string[]>([]);
+  const [photosToRemove, setPhotosToRemove] = useState<number[]>([]);
   
   // Establecer fecha y hora actuales al iniciar el formulario (si es nuevo registro)
   useEffect(() => {
@@ -55,15 +55,33 @@ const ServiceForm = ({
       startDateTime: '',
       details: '',
       photoUrl: '',
+      photoUrls: [],
     },
   });
 
   const formData = watch();
 
   useEffect(() => {
-    // Si hay una foto en los datos iniciales, establecerla como la seleccionada
-    if (initialData?.photoUrl) {
-      setSelectedPhoto(initialData.photoUrl);
+    // Initialize photos from initial data
+    if (initialData) {
+      const photosList: string[] = [];
+      
+      // Handle legacy single photo
+      if (initialData.photoUrl && initialData.photoUrl.trim() !== '') {
+        photosList.push(initialData.photoUrl);
+      }
+      
+      // Handle multiple photos if available
+      if (initialData.photoUrls && initialData.photoUrls.length > 0) {
+        // Merge without duplicates
+        initialData.photoUrls.forEach(url => {
+          if (!photosList.includes(url)) {
+            photosList.push(url);
+          }
+        });
+      }
+      
+      setSelectedPhotos(photosList);
     }
   }, [initialData]);
 
@@ -72,26 +90,31 @@ const ServiceForm = ({
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setSelectedPhoto(reader.result as string);
-        setRemovePhoto(false);
+        const photoUrl = reader.result as string;
+        setSelectedPhotos(prev => [...prev, photoUrl]);
+        // Remove from removal list if re-added
+        setPhotosToRemove(prev => prev.filter(index => index >= selectedPhotos.length));
       };
       reader.readAsDataURL(file);
     }
   };
 
   const handleFormSubmit = (data: ServiceFormData) => {
-    if (removePhoto) {
-      data.photoUrl = '';
-    } else if (selectedPhoto) {
-      data.photoUrl = selectedPhoto;
-    }
+    // Filter out photos marked for removal
+    const updatedPhotos = selectedPhotos.filter((_, index) => !photosToRemove.includes(index));
+    
+    // Handle backward compatibility for single photo
+    data.photoUrl = updatedPhotos.length > 0 ? updatedPhotos[0] : '';
+    data.photoUrls = updatedPhotos;
+    
     onSubmit(data);
   };
 
-  const handleRemovePhoto = () => {
-    setSelectedPhoto(null);
-    setRemovePhoto(true);
+  const handleRemovePhoto = (indexToRemove: number) => {
+    setPhotosToRemove(prev => [...prev, indexToRemove]);
   };
+
+  const isPhotoMarkedForRemoval = (index: number) => photosToRemove.includes(index);
 
   return (
     <form onSubmit={handleSubmit(() => setPreviewOpen(true))} className="space-y-6">
@@ -154,22 +177,43 @@ const ServiceForm = ({
         </div>
 
         <div>
-          <Label htmlFor="photo" className="block mb-2">
-            Foto
+          <Label className="block mb-2">
+            Fotos
           </Label>
-          <div className="flex items-center space-x-4">
+          <div className="flex flex-wrap items-center gap-4 mb-4">
             <Button
               type="button"
               variant="outline"
-              onClick={() => document.getElementById('photo')?.click()}
+              onClick={() => document.getElementById('photo-file')?.click()}
+              className="flex items-center space-x-2"
+              disabled={isSubmitting}
+            >
+              <Plus className="w-4 h-4" />
+              <span>Agregar Foto</span>
+            </Button>
+            
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => document.getElementById('photo-camera')?.click()}
               className="flex items-center space-x-2"
               disabled={isSubmitting}
             >
               <Camera className="w-4 h-4" />
               <span>Tomar Foto</span>
             </Button>
+
             <input
-              id="photo"
+              id="photo-file"
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handlePhotoChange}
+              disabled={isSubmitting}
+            />
+            
+            <input
+              id="photo-camera"
               type="file"
               accept="image/*"
               capture="environment"
@@ -177,31 +221,42 @@ const ServiceForm = ({
               onChange={handlePhotoChange}
               disabled={isSubmitting}
             />
-            
-            {selectedPhoto && (
-              <Button
-                type="button"
-                variant="destructive"
-                onClick={handleRemovePhoto}
-                className="flex items-center space-x-2"
-                disabled={isSubmitting}
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>Eliminar Foto</span>
-              </Button>
-            )}
           </div>
-          {selectedPhoto && (
-            <div className="mt-4">
-              <img
-                src={selectedPhoto}
-                alt="Preview"
-                className="w-full max-w-md rounded-lg shadow-sm"
-              />
+          
+          {selectedPhotos.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-4">
+              {selectedPhotos.map((photo, index) => (
+                <div key={index} className={`relative rounded-lg overflow-hidden border ${isPhotoMarkedForRemoval(index) ? 'opacity-40 border-red-400' : 'border-gray-200'}`}>
+                  <img
+                    src={photo}
+                    alt={`Foto ${index + 1}`}
+                    className="w-full h-48 object-cover"
+                  />
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    className="absolute top-2 right-2 h-8 w-8 p-0 rounded-full"
+                    onClick={() => isPhotoMarkedForRemoval(index) ? 
+                      setPhotosToRemove(prev => prev.filter(i => i !== index)) : 
+                      handleRemovePhoto(index)}
+                    disabled={isSubmitting}
+                  >
+                    {isPhotoMarkedForRemoval(index) ? 
+                      <Plus className="h-4 w-4" /> : 
+                      <X className="h-4 w-4" />}
+                  </Button>
+                </div>
+              ))}
             </div>
           )}
-          {removePhoto && (
-            <p className="mt-2 text-amber-600 dark:text-amber-400">La foto será eliminada al guardar.</p>
+          
+          {photosToRemove.length > 0 && (
+            <p className="mt-2 text-amber-600 dark:text-amber-400">
+              {photosToRemove.length === selectedPhotos.length ? 
+                "Todas las fotos serán eliminadas al guardar." : 
+                `${photosToRemove.length} foto(s) marcada(s) para eliminar al guardar.`}
+            </p>
           )}
         </div>
       </div>
@@ -247,20 +302,24 @@ const ServiceForm = ({
               <h3 className="font-medium text-gray-700 dark:text-gray-300">Detalle</h3>
               <p className="whitespace-pre-wrap">{formData.details}</p>
             </div>
-            {selectedPhoto && !removePhoto && (
+            {selectedPhotos.length > 0 && (
               <div>
-                <h3 className="font-medium text-gray-700 dark:text-gray-300">Foto</h3>
-                <img
-                  src={selectedPhoto}
-                  alt="Preview"
-                  className="mt-2 w-full max-w-md rounded-lg shadow-sm"
-                />
-              </div>
-            )}
-            {removePhoto && (
-              <div>
-                <h3 className="font-medium text-gray-700 dark:text-gray-300">Foto</h3>
-                <p className="text-amber-600 dark:text-amber-400">La foto será eliminada</p>
+                <h3 className="font-medium text-gray-700 dark:text-gray-300">Fotos ({selectedPhotos.length - photosToRemove.length} de {selectedPhotos.length})</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
+                  {selectedPhotos.map((photo, index) => !isPhotoMarkedForRemoval(index) && (
+                    <img
+                      key={index}
+                      src={photo}
+                      alt={`Foto ${index + 1}`}
+                      className="w-full max-h-40 object-cover rounded-lg shadow-sm"
+                    />
+                  ))}
+                </div>
+                {photosToRemove.length > 0 && (
+                  <p className="text-amber-600 dark:text-amber-400 mt-2">
+                    {photosToRemove.length} foto(s) será(n) eliminada(s)
+                  </p>
+                )}
               </div>
             )}
           </div>

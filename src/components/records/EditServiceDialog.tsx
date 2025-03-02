@@ -39,7 +39,8 @@ const EditServiceDialog: React.FC<EditServiceDialogProps> = ({
             vesselName: service.vesselName,
             startDateTime: service.startDateTime,
             details: service.details,
-            photoUrl: service.photoUrl || ''
+            photoUrl: service.photoUrl || '',
+            photoUrls: service.photoUrls || []
           }}
           onSubmit={onUpdate}
           isSubmitting={isSubmitting}
