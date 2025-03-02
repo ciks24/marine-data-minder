@@ -89,34 +89,33 @@ const RecordCard: React.FC<RecordCardProps> = ({ service, onEdit, onDelete }) =>
 
   return (
     <>
-      <Card key={service.id} className="relative flex flex-col card-hover">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg text-foreground">{service.vesselName}</CardTitle>
-          <CardDescription>{service.clientName}</CardDescription>
+      <Card key={service.id} className="relative flex flex-col card-hover max-w-full">
+        <CardHeader className="pb-2 px-3 py-2">
+          <CardTitle className="text-base text-foreground">{service.vesselName}</CardTitle>
+          <CardDescription className="text-sm">{service.clientName}</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3 flex-grow pb-2">
+        <CardContent className="space-y-2 flex-grow pb-2 px-3">
           <div>
             <p className="text-xs font-medium text-muted-foreground">Fecha y Hora</p>
-            <p className="text-sm">{formatDateTime(service.startDateTime)}</p>
+            <p className="text-xs">{formatDateTime(service.startDateTime)}</p>
           </div>
           <div>
             <p className="text-xs font-medium text-muted-foreground">Detalle</p>
-            <p className="text-sm">{service.details}</p>
+            <p className="text-xs line-clamp-3">{service.details}</p>
           </div>
           {firstPhoto && (
             <div className="relative">
               <img
                 src={firstPhoto}
                 alt="Servicio"
-                className="w-full h-40 object-cover rounded-md cursor-pointer"
+                className="w-full h-32 object-cover rounded-md cursor-pointer"
                 onClick={() => openPhotoDialog(0)}
                 onError={(e) => {
-                  // Si la imagen no carga, mostrar imagen de respaldo
                   e.currentTarget.src = 'https://via.placeholder.com/400x300?text=Imagen+no+disponible';
                 }}
               />
               {hasMultiplePhotos && (
-                <div className="absolute bottom-2 right-2 bg-black/50 text-white px-2 py-1 rounded-md text-xs flex items-center">
+                <div className="absolute bottom-2 right-2 bg-black/50 text-white px-2 py-0.5 rounded-md text-xs flex items-center">
                   <Image className="w-3 h-3 mr-1" />
                   {photoUrls.length}
                 </div>
@@ -125,27 +124,31 @@ const RecordCard: React.FC<RecordCardProps> = ({ service, onEdit, onDelete }) =>
           )}
           {!service.synced && (
             <div className="absolute top-2 right-2">
-              <Badge variant="outline" className="bg-yellow-500/10 text-yellow-500 dark:bg-yellow-500/20">
+              <Badge variant="outline" className="bg-yellow-500/10 text-yellow-500 dark:bg-yellow-500/20 text-xs py-0.5">
                 Pendiente
               </Badge>
             </div>
           )}
         </CardContent>
-        <CardFooter className="flex justify-end space-x-2 mt-auto pt-2">
+        <CardFooter className="flex justify-end space-x-2 mt-auto pt-2 px-3 py-2">
           <Button 
             variant="outline" 
             size="sm"
             onClick={() => onEdit(service)}
-            className="h-8 px-2 text-xs"
+            className="h-7 px-2 text-xs min-w-[60px]"
           >
-            <Edit2 className="h-3.5 w-3.5 mr-1" />
+            <Edit2 className="h-3 w-3 mr-1" />
             Editar
           </Button>
           
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="outline" size="sm" className="h-8 px-2 text-xs text-destructive border-destructive/30 hover:bg-destructive/10">
-                <Trash2 className="h-3.5 w-3.5 mr-1" />
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-7 px-2 text-xs text-destructive border-destructive/30 hover:bg-destructive/10 min-w-[60px]"
+              >
+                <Trash2 className="h-3 w-3 mr-1" />
                 Eliminar
               </Button>
             </AlertDialogTrigger>
@@ -169,19 +172,19 @@ const RecordCard: React.FC<RecordCardProps> = ({ service, onEdit, onDelete }) =>
 
       {/* Photo Dialog */}
       <Dialog open={photoDialogOpen} onOpenChange={setPhotoDialogOpen}>
-        <DialogContent className="sm:max-w-[800px] max-h-[90vh]">
-          <DialogHeader>
-            <DialogTitle className="app-title">Fotos - {service.vesselName}</DialogTitle>
-            <DialogDescription>
-              {selectedPhotoIndex + 1} de {photoUrls.length}
+        <DialogContent className="sm:max-w-[90vw] w-[95vw] max-h-[90vh] p-4">
+          <DialogHeader className="space-y-2">
+            <DialogTitle className="text-base">{service.vesselName}</DialogTitle>
+            <DialogDescription className="text-xs">
+              Foto {selectedPhotoIndex + 1} de {photoUrls.length}
             </DialogDescription>
           </DialogHeader>
-          <div className="flex flex-col items-center justify-center">
+          <div className="flex flex-col items-center justify-center py-2">
             {photoUrls.length > 0 && (
               <img
                 src={photoUrls[selectedPhotoIndex]}
                 alt={`Foto ${selectedPhotoIndex + 1}`}
-                className="max-h-[60vh] max-w-full object-contain rounded-md"
+                className="max-h-[60vh] w-full object-contain rounded-md"
                 onError={(e) => {
                   e.currentTarget.src = 'https://via.placeholder.com/400x300?text=Imagen+no+disponible';
                 }}
@@ -189,17 +192,19 @@ const RecordCard: React.FC<RecordCardProps> = ({ service, onEdit, onDelete }) =>
             )}
           </div>
           {photoUrls.length > 1 && (
-            <div className="flex justify-center gap-4 mt-4">
-              <Button variant="outline" onClick={handlePrevPhoto}>
+            <div className="flex justify-center gap-2 mt-2">
+              <Button variant="outline" size="sm" onClick={handlePrevPhoto} className="h-8 px-3 text-xs">
                 Anterior
               </Button>
-              <Button variant="outline" onClick={handleNextPhoto}>
+              <Button variant="outline" size="sm" onClick={handleNextPhoto} className="h-8 px-3 text-xs">
                 Siguiente
               </Button>
             </div>
           )}
           <DialogFooter>
-            <Button onClick={() => setPhotoDialogOpen(false)}>Cerrar</Button>
+            <Button size="sm" onClick={() => setPhotoDialogOpen(false)} className="h-8 px-3 text-xs w-full sm:w-auto">
+              Cerrar
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
