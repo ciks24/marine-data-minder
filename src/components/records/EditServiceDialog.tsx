@@ -44,7 +44,7 @@ const EditServiceDialog: React.FC<EditServiceDialogProps> = ({
           onSubmit={onUpdate}
           isSubmitting={isSubmitting}
           isEditMode={true}
-          disableDateTime={true}
+          serviceId={service.id}
         />
       </DialogContent>
     </Dialog>

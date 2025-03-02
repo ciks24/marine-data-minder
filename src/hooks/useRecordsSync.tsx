@@ -1,9 +1,11 @@
+
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { MarineService, ServiceFormData } from '@/types/service';
 import { syncService, useOnlineStatus } from '@/services/syncService';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { v4 as uuidv4 } from 'uuid';
 
 export const useRecordsSync = () => {
   const [services, setServices] = useState<MarineService[]>([]);
@@ -103,15 +105,89 @@ export const useRecordsSync = () => {
     setIsEditing(true);
   };
 
+  const uploadImageToSupabase = async (file: File | null): Promise<string | null> => {
+    if (!file || !isOnline || !user) return null;
+    
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${uuidv4()}.${fileExt}`;
+      const filePath = `${user.id}/${fileName}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('service_photos')
+        .upload(filePath, file);
+        
+      if (uploadError) {
+        console.error('Error uploading image:', uploadError);
+        throw uploadError;
+      }
+      
+      const { data } = supabase.storage
+        .from('service_photos')
+        .getPublicUrl(filePath);
+        
+      return data.publicUrl;
+    } catch (error) {
+      console.error('Error uploading to Supabase:', error);
+      return null;
+    }
+  };
+  
+  const dataURItoBlob = (dataURI: string): File | null => {
+    if (!dataURI || !dataURI.startsWith('data:')) return null;
+    
+    try {
+      const arr = dataURI.split(',');
+      const mime = arr[0].match(/:(.*?);/)?.[1];
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      
+      while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+      }
+      
+      return new File([u8arr], 'image.jpg', { type: mime });
+    } catch (error) {
+      console.error('Error converting data URI to blob:', error);
+      return null;
+    }
+  };
+
   const handleUpdate = async (updatedData: ServiceFormData) => {
     if (!editingService) return;
 
     try {
       setIsSubmitting(true);
       
+      let photoUrl = editingService.photoUrl;
+      
+      // Manejar la imagen si es una nueva
+      if (updatedData.photoUrl && updatedData.photoUrl !== editingService.photoUrl) {
+        if (updatedData.photoUrl.startsWith('data:')) {
+          // Es una nueva imagen en formato data URI
+          const fileBlob = dataURItoBlob(updatedData.photoUrl);
+          if (fileBlob) {
+            const uploadedUrl = await uploadImageToSupabase(fileBlob);
+            if (uploadedUrl) {
+              photoUrl = uploadedUrl;
+            }
+          }
+        } else {
+          // Ya es una URL a una imagen existente
+          photoUrl = updatedData.photoUrl;
+        }
+      } else if (updatedData.photoUrl === '') {
+        // Se eliminó la imagen
+        photoUrl = '';
+      }
+      
       const updatedService: MarineService = {
         ...editingService,
-        ...updatedData,
+        clientName: updatedData.clientName,
+        vesselName: updatedData.vesselName,
+        details: updatedData.details,
+        photoUrl: photoUrl,
         updatedAt: new Date().toISOString(),
         synced: false
       };
@@ -202,6 +278,7 @@ export const useRecordsSync = () => {
     refreshServices,
     handleEdit,
     handleUpdate,
-    handleDelete
+    handleDelete,
+    uploadImageToSupabase
   };
 };
