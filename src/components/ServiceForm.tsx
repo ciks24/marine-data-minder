@@ -19,9 +19,10 @@ interface ServiceFormProps {
   onSubmit: (data: ServiceFormData) => void;
   initialData?: ServiceFormData;
   isSubmitting?: boolean;
+  isEditMode?: boolean;
 }
 
-const ServiceForm = ({ onSubmit, initialData, isSubmitting = false }: ServiceFormProps) => {
+const ServiceForm = ({ onSubmit, initialData, isSubmitting = false, isEditMode = false }: ServiceFormProps) => {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const { register, handleSubmit, watch, formState: { errors } } = useForm<ServiceFormData>({
