@@ -22,6 +22,7 @@ interface ServiceFormProps {
   isSubmitting?: boolean;
   isEditMode?: boolean;
   disableDateTime?: boolean;
+  serviceId?: string;
 }
 
 const ServiceForm = ({ 
