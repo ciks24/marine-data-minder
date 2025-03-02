@@ -12,46 +12,127 @@ const DB_VERSION = 3;
 
 // Función para inicializar la base de datos
 const initDB = async () => {
-  try {
-    return await openDB(DB_NAME, DB_VERSION, {
-      upgrade(db, oldVersion, newVersion) {
-        // Si existe una versión anterior, eliminarla
-        if (db.objectStoreNames.contains(STORE_NAME)) {
-          db.deleteObjectStore(STORE_NAME);
+  let retryCount = 0;
+  const maxRetries = 3;
+
+  while (retryCount < maxRetries) {
+    try {
+      const db = await openDB(DB_NAME, DB_VERSION, {
+        upgrade(db, oldVersion, newVersion) {
+          console.log(`Actualizando base de datos de v${oldVersion} a v${newVersion}`);
+          
+          try {
+            // Si existe una versión anterior, eliminarla
+            if (db.objectStoreNames.contains(STORE_NAME)) {
+              console.log('Eliminando store anterior');
+              db.deleteObjectStore(STORE_NAME);
+            }
+            
+            // Crear nuevo store con índices
+            console.log('Creando nuevo store con índices');
+            const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+            store.createIndex('synced', 'synced');
+            store.createIndex('updatedAt', 'updatedAt');
+            
+            console.log('Base de datos actualizada correctamente');
+          } catch (upgradeError) {
+            console.error('Error durante la actualización de la base de datos:', upgradeError);
+            throw upgradeError;
+          }
+        },
+        blocked() {
+          console.warn('La base de datos está bloqueada por otra pestaña');
+        },
+        blocking() {
+          console.warn('Esta pestaña está bloqueando una actualización de la base de datos');
+        },
+        terminated() {
+          console.warn('La conexión con la base de datos fue terminada');
         }
-        
-        // Crear nuevo store con índices
-        const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-        store.createIndex('synced', 'synced');
-        store.createIndex('updatedAt', 'updatedAt');
-      },
-    });
-  } catch (error) {
-    console.error('Error inicializando DB:', error);
-    return null;
+      });
+
+      // Verificar que la base de datos se inicializó correctamente
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        throw new Error('El store no fue creado correctamente');
+      }
+
+      return db;
+    } catch (error) {
+      console.error(`Error en intento ${retryCount + 1} de inicializar IndexedDB:`, error);
+      retryCount++;
+      
+      if (retryCount === maxRetries) {
+        console.error('No se pudo inicializar la base de datos después de todos los intentos');
+        return null;
+      }
+      
+      // Esperar antes de reintentar
+      await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+    }
   }
+
+  return null;
 };
 
 // Función para guardar servicios de forma segura
 const saveToLocalDB = async (services: MarineService[]): Promise<boolean> => {
   const db = await initDB();
-  if (!db) return false;
+  if (!db) {
+    console.error('No se pudo inicializar la base de datos local');
+    return false;
+  }
 
   try {
     const tx = db.transaction(STORE_NAME, 'readwrite');
+    
+    // Verificar que la transacción se creó correctamente
+    if (!tx) {
+      throw new Error('No se pudo crear la transacción');
+    }
+
+    // Limpiar datos existentes
     await tx.store.clear();
+    
+    // Validar servicios antes de guardar
+    const validServices = services.filter(service => {
+      if (!service.id || !service.startDateTime) {
+        console.warn('Servicio inválido encontrado:', service);
+        return false;
+      }
+      return true;
+    });
+    
+    if (validServices.length === 0) {
+      console.warn('No hay servicios válidos para guardar');
+      return false;
+    }
     
     // Guardar servicios en chunks para evitar transacciones muy grandes
     const chunkSize = 10;
-    for (let i = 0; i < services.length; i += chunkSize) {
-      const chunk = services.slice(i, i + chunkSize);
-      await Promise.all(chunk.map(service => tx.store.add(service)));
+    for (let i = 0; i < validServices.length; i += chunkSize) {
+      const chunk = validServices.slice(i, i + chunkSize);
+      await Promise.all(chunk.map(async service => {
+        try {
+          await tx.store.add(service);
+        } catch (error) {
+          console.error(`Error guardando servicio ${service.id}:`, error);
+          throw error;
+        }
+      }));
     }
     
     await tx.done;
     return true;
   } catch (error) {
     console.error('Error guardando en IndexedDB:', error);
+    // Intentar recuperar la transacción si es posible
+    try {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      await tx.store.clear();
+      await tx.done;
+    } catch (cleanupError) {
+      console.error('Error limpiando la base de datos:', cleanupError);
+    }
     return false;
   }
 };
@@ -59,16 +140,61 @@ const saveToLocalDB = async (services: MarineService[]): Promise<boolean> => {
 // Función para cargar servicios
 const loadFromLocalDB = async (): Promise<MarineService[]> => {
   const db = await initDB();
-  if (!db) return [];
+  if (!db) {
+    console.error('No se pudo inicializar la base de datos local');
+    return [];
+  }
 
   try {
-    const services = await db.getAll(STORE_NAME);
-    return services.sort((a, b) => 
+    // Intentar obtener todos los servicios
+    const rawServices = await db.getAll(STORE_NAME);
+    
+    // Validar y limpiar los datos
+    const validServices = rawServices
+      .filter(service => {
+        if (!service || typeof service !== 'object') {
+          console.warn('Servicio inválido encontrado:', service);
+          return false;
+        }
+        
+        if (!service.id || !service.startDateTime) {
+          console.warn('Servicio con datos incompletos:', service);
+          return false;
+        }
+        
+        return true;
+      })
+      .map(service => ({
+        ...service,
+        // Asegurar que los campos requeridos existan
+        clientName: service.clientName || '',
+        vesselName: service.vesselName || '',
+        details: service.details || '',
+        photoUrl: service.photoUrl || '',
+        photoUrls: Array.isArray(service.photoUrls) ? service.photoUrls.filter(url => url && typeof url === 'string') : [],
+        createdAt: service.createdAt || service.startDateTime,
+        updatedAt: service.updatedAt || service.startDateTime,
+        synced: Boolean(service.synced)
+      }));
+
+    // Ordenar por fecha de actualización
+    return validServices.sort((a, b) => 
       new Date(b.updatedAt || b.createdAt).getTime() - 
       new Date(a.updatedAt || a.createdAt).getTime()
     );
   } catch (error) {
     console.error('Error cargando desde IndexedDB:', error);
+    
+    // Intentar recuperar la base de datos si es posible
+    try {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const count = await tx.store.count();
+      console.warn(`Registros en la base de datos: ${count}`);
+      await tx.done;
+    } catch (checkError) {
+      console.error('Error verificando la base de datos:', checkError);
+    }
+    
     return [];
   }
 };
@@ -113,36 +239,52 @@ export const useRecordsSync = () => {
     }
 
     setIsSyncing(true);
-    try {
-      // Obtener servicios de Supabase
-      const cloudServices = await syncService.fetchAllServices();
-      
-      if (!Array.isArray(cloudServices)) {
-        throw new Error('Error al obtener datos de la nube');
-      }
-      
-      // Guardar en IndexedDB
-      const saved = await saveToLocalDB(cloudServices);
-      if (!saved) {
-        throw new Error('Error guardando datos localmente');
-      }
-      
-      setServices(cloudServices);
-      toast.success('Datos sincronizados correctamente');
-    } catch (error: any) {
-      console.error('Error en sincronización:', error);
-      toast.error(`Error al sincronizar: ${error.message}`);
-      
-      // Intentar cargar datos locales como fallback
+    let retryCount = 0;
+    const maxRetries = 3;
+
+    while (retryCount < maxRetries) {
       try {
-        const localServices = await loadFromLocalDB();
-        setServices(localServices);
-      } catch (localError) {
-        console.error('Error cargando datos locales:', localError);
+        // Obtener servicios de Supabase
+        const cloudServices = await syncService.fetchAllServices();
+        
+        if (!Array.isArray(cloudServices)) {
+          throw new Error('Error al obtener datos de la nube');
+        }
+        
+        // Guardar en IndexedDB
+        const saved = await saveToLocalDB(cloudServices);
+        if (!saved) {
+          throw new Error('Error guardando datos localmente');
+        }
+        
+        setServices(cloudServices);
+        toast.success('Datos sincronizados correctamente');
+        return; // Salir del bucle si todo fue exitoso
+      } catch (error: any) {
+        console.error(`Intento ${retryCount + 1} fallido:`, error);
+        retryCount++;
+        
+        if (retryCount === maxRetries) {
+          console.error('Error en sincronización después de todos los intentos:', error);
+          toast.error(`Error al sincronizar: ${error.message}`);
+          
+          // Intentar cargar datos locales como fallback
+          try {
+            const localServices = await loadFromLocalDB();
+            setServices(localServices);
+            toast.warning('Se están mostrando datos locales');
+          } catch (localError) {
+            console.error('Error cargando datos locales:', localError);
+            toast.error('No se pudieron cargar los datos');
+          }
+        } else {
+          // Esperar antes de reintentar
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+          toast.warning(`Reintentando sincronización (intento ${retryCount + 1} de ${maxRetries})...`);
+        }
       }
-    } finally {
-      setIsSyncing(false);
     }
+    setIsSyncing(false);
   };
 
   const handleEdit = (service: MarineService) => {

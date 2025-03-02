@@ -122,7 +122,12 @@ export const syncService = {
    */
   async saveService(service: MarineService): Promise<MarineService | null> {
     try {
-      // Validar datos requeridos
+      // Validar datos requeridos y usuario autenticado
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.id) {
+        throw new Error('Usuario no autenticado');
+      }
+
       if (!service.id || !service.startDateTime) {
         throw new Error('Datos de servicio incompletos');
       }
@@ -133,11 +138,23 @@ export const syncService = {
       // Manejar las fotos múltiples, evitando duplicados
       const existingPhotos = new Set<string>();
       
+      // Validar y procesar photoUrl legacy
+      if (service.photoUrl && typeof service.photoUrl === 'string') {
+        if (service.photoUrl.startsWith('data:image')) {
+          photosToUpload.push(service.photoUrl);
+        } else if (!existingPhotos.has(service.photoUrl)) {
+          existingPhotos.add(service.photoUrl);
+        }
+      }
+      
+      // Validar y procesar photoUrls
       if (Array.isArray(service.photoUrls)) {
         service.photoUrls.forEach(url => {
           if (url && typeof url === 'string') {
             if (url.startsWith('data:image')) {
-              photosToUpload.push(url);
+              if (!photosToUpload.includes(url)) {
+                photosToUpload.push(url);
+              }
             } else if (!existingPhotos.has(url)) {
               existingPhotos.add(url);
             }
@@ -151,7 +168,7 @@ export const syncService = {
         try {
           uploadedUrls = await this.uploadMultiplePhotos(photosToUpload);
           if (uploadedUrls.length !== photosToUpload.length) {
-            console.warn('Algunas fotos no se pudieron subir');
+            console.warn(`No todas las fotos se pudieron subir: ${uploadedUrls.length} de ${photosToUpload.length}`);
           }
         } catch (photoError: any) {
           console.error('Error subiendo fotos:', photoError);
@@ -160,7 +177,7 @@ export const syncService = {
       }
       
       // Combinar fotos existentes con las nuevas subidas
-      const finalPhotoUrls = [...existingPhotos, ...uploadedUrls];
+      const finalPhotoUrls = [...existingPhotos, ...uploadedUrls].filter(Boolean);
       
       // Preparar el servicio para guardar
       const serviceToSave = {
@@ -173,38 +190,56 @@ export const syncService = {
         photo_urls: finalPhotoUrls, // Todas las fotos en el array
         created_at: service.createdAt || service.startDateTime,
         updated_at: new Date().toISOString(),
-        user_id: (await supabase.auth.getUser()).data.user?.id
+        user_id: user.id
       };
 
-      // Guardar en Supabase
-      const { data, error } = await supabase
-        .from('marine_services')
-        .upsert(serviceToSave)
-        .select()
-        .single();
+      // Guardar en Supabase con reintentos
+      let attempts = 0;
+      const maxAttempts = 3;
+      let lastError = null;
 
-      if (error) {
-        console.error('Error guardando en Supabase:', error);
-        throw new Error(`Error al guardar en la base de datos: ${error.message}`);
+      while (attempts < maxAttempts) {
+        try {
+          const { data, error } = await supabase
+            .from('marine_services')
+            .upsert(serviceToSave)
+            .select()
+            .single();
+
+          if (error) {
+            lastError = error;
+            throw error;
+          }
+
+          if (!data) {
+            throw new Error('No se recibieron datos después de guardar');
+          }
+
+          // Convertir la respuesta al formato MarineService
+          return {
+            id: data.id,
+            clientName: data.client_name || '',
+            vesselName: data.vessel_name || '',
+            startDateTime: data.start_date_time,
+            details: data.details || '',
+            photoUrl: data.photo_url || '',
+            photoUrls: Array.isArray(data.photo_urls) ? data.photo_urls : [],
+            createdAt: data.created_at || data.start_date_time,
+            updatedAt: data.updated_at || data.start_date_time,
+            synced: true
+          };
+        } catch (error) {
+          attempts++;
+          if (attempts === maxAttempts) {
+            console.error(`Error después de ${maxAttempts} intentos:`, lastError);
+            throw new Error(`Error al guardar en la base de datos después de ${maxAttempts} intentos: ${lastError?.message || 'Error desconocido'}`);
+          }
+          // Esperar antes de reintentar
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempts));
+        }
       }
 
-      if (!data) {
-        throw new Error('No se recibieron datos después de guardar');
-      }
-
-      // Convertir la respuesta al formato MarineService
-      return {
-        id: data.id,
-        clientName: data.client_name || '',
-        vesselName: data.vessel_name || '',
-        startDateTime: data.start_date_time,
-        details: data.details || '',
-        photoUrl: data.photo_url || '',
-        photoUrls: Array.isArray(data.photo_urls) ? data.photo_urls : [],
-        createdAt: data.created_at || data.start_date_time,
-        updatedAt: data.updated_at || data.start_date_time,
-        synced: true
-      };
+      throw new Error('Error inesperado al guardar el servicio');
     } catch (error: any) {
       console.error('Error en saveService:', error);
       throw error;
