@@ -123,7 +123,6 @@ export const syncService = {
         details: service.details,
         photo_url: cloudPhotoUrl || '',
         photo_urls: cloudPhotoUrls,
-        synced: true,
         created_at: service.createdAt,
         updated_at: new Date().toISOString(),
         user_id: (await supabase.auth.getUser()).data.user?.id

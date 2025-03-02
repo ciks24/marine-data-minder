@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Plus, RefreshCw, Download, Camera } from 'lucide-react';
@@ -35,26 +34,16 @@ const RecordsHeader: React.FC<RecordsHeaderProps> = ({
         <Button
           variant="outline"
           size="sm"
-          onClick={onRefresh}
+          onClick={async () => {
+            await onRefresh();
+            if (onSync) await onSync();
+          }}
           disabled={!isOnline || isLoading}
           className="h-9"
         >
           <RefreshCw className={`h-4 w-4 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
-          <span className="hidden xs:inline">Actualizar</span>
+          <span className="hidden xs:inline">Sincronizar</span>
         </Button>
-
-        {onSync && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onSync}
-            disabled={!isOnline || isLoading}
-            className="h-9"
-          >
-            <RefreshCw className={`h-4 w-4 mr-1 ${isSyncing ? 'animate-spin' : ''}`} />
-            <span className="hidden xs:inline">Sincronizar</span>
-          </Button>
-        )}
 
         <Button
           variant="outline"
