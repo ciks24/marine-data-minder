@@ -3,230 +3,143 @@ import { toast } from 'sonner';
 import { MarineService, ServiceFormData } from '@/types/service';
 import { syncService, useOnlineStatus } from '@/services/syncService';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
-import { v4 as uuidv4 } from 'uuid';
 import { openDB } from 'idb';
 
 // Configuración de IndexedDB
-const DB_NAME = 'marine-data-minder';
-const STORE_NAME = 'services';
-const DB_VERSION = 1;
+const DB_NAME = 'marine-data-minder-v3';
+const STORE_NAME = 'marine-services-store';
+const DB_VERSION = 3;
 
-// Inicializar IndexedDB
+// Función para inicializar la base de datos
 const initDB = async () => {
   try {
-    const db = await openDB(DB_NAME, DB_VERSION, {
-      upgrade(db) {
-        if (!db.objectStoreNames.contains(STORE_NAME)) {
-          db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+    return await openDB(DB_NAME, DB_VERSION, {
+      upgrade(db, oldVersion, newVersion) {
+        // Si existe una versión anterior, eliminarla
+        if (db.objectStoreNames.contains(STORE_NAME)) {
+          db.deleteObjectStore(STORE_NAME);
         }
+        
+        // Crear nuevo store con índices
+        const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+        store.createIndex('synced', 'synced');
+        store.createIndex('updatedAt', 'updatedAt');
       },
     });
-    return db;
   } catch (error) {
-    console.error('Error inicializando IndexedDB:', error);
+    console.error('Error inicializando DB:', error);
     return null;
   }
 };
 
-// Función para verificar disponibilidad de localStorage
-const checkStorageAvailability = () => {
+// Función para guardar servicios de forma segura
+const saveToLocalDB = async (services: MarineService[]): Promise<boolean> => {
+  const db = await initDB();
+  if (!db) return false;
+
   try {
-    const testKey = '__storage_test__';
-    localStorage.setItem(testKey, testKey);
-    localStorage.removeItem(testKey);
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    await tx.store.clear();
+    
+    // Guardar servicios en chunks para evitar transacciones muy grandes
+    const chunkSize = 10;
+    for (let i = 0; i < services.length; i += chunkSize) {
+      const chunk = services.slice(i, i + chunkSize);
+      await Promise.all(chunk.map(service => tx.store.add(service)));
+    }
+    
+    await tx.done;
     return true;
-  } catch (e) {
+  } catch (error) {
+    console.error('Error guardando en IndexedDB:', error);
     return false;
+  }
+};
+
+// Función para cargar servicios
+const loadFromLocalDB = async (): Promise<MarineService[]> => {
+  const db = await initDB();
+  if (!db) return [];
+
+  try {
+    const services = await db.getAll(STORE_NAME);
+    return services.sort((a, b) => 
+      new Date(b.updatedAt || b.createdAt).getTime() - 
+      new Date(a.updatedAt || a.createdAt).getTime()
+    );
+  } catch (error) {
+    console.error('Error cargando desde IndexedDB:', error);
+    return [];
   }
 };
 
 export const useRecordsSync = () => {
   const [services, setServices] = useState<MarineService[]>([]);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [editingService, setEditingService] = useState<MarineService | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isOnline = useOnlineStatus();
   const { user } = useAuth();
 
-  // Cargar datos locales
+  // Cargar datos al inicio
   useEffect(() => {
-    const loadLocalData = async () => {
+    const loadInitialData = async () => {
       try {
-        if (checkStorageAvailability()) {
-          const loadedServices = JSON.parse(localStorage.getItem('services') || '[]');
-          setServices(loadedServices);
-        } else {
-          const db = await initDB();
-          if (db) {
-            const loadedServices = await db.getAll(STORE_NAME);
-            setServices(loadedServices);
-          }
+        const localServices = await loadFromLocalDB();
+        setServices(localServices);
+        
+        // Si hay conexión, intentar sincronizar
+        if (isOnline && user) {
+          await syncServices();
         }
       } catch (error) {
-        console.error('Error cargando datos locales:', error);
-        toast.error('Error al cargar los datos locales');
+        console.error('Error cargando datos iniciales:', error);
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadLocalData();
-  }, []);
-
-  const saveToLocalStorage = async (updatedServices: MarineService[]) => {
-    try {
-      // Asegurarse de que los servicios tengan la estructura correcta
-      const validatedServices = updatedServices.map(service => ({
-        id: service.id,
-        clientName: service.clientName || '',
-        vesselName: service.vesselName || '',
-        startDateTime: service.startDateTime || new Date().toISOString(),
-        details: service.details || '',
-        photoUrl: service.photoUrl || '',
-        photoUrls: Array.isArray(service.photoUrls) ? service.photoUrls : [],
-        createdAt: service.createdAt || new Date().toISOString(),
-        updatedAt: service.updatedAt || new Date().toISOString(),
-        synced: Boolean(service.synced)
-      }));
-
-      if (checkStorageAvailability()) {
-        localStorage.setItem('services', JSON.stringify(validatedServices));
-        return true;
-      } else {
-        const db = await initDB();
-        if (!db) {
-          console.error('No se pudo inicializar IndexedDB');
-          return false;
-        }
-
-        try {
-          const tx = db.transaction(STORE_NAME, 'readwrite');
-          await tx.store.clear();
-          
-          // Guardar servicios uno por uno para mejor manejo de errores
-          for (const service of validatedServices) {
-            await tx.store.add(service);
-          }
-          
-          await tx.done;
-          return true;
-        } catch (txError) {
-          console.error('Error en la transacción de IndexedDB:', txError);
-          return false;
-        }
-      }
-    } catch (error) {
-      console.error('Error guardando datos localmente:', error);
-      return false;
+    if (user) {
+      loadInitialData();
     }
-  };
-
-  const fetchServicesFromCloud = async (showNotification = false) => {
-    if (!user || !isOnline) return;
-
-    try {
-      const cloudServices = await syncService.fetchAllServices();
-      console.log('Servicios obtenidos de la nube:', cloudServices);
-      
-      // Obtener servicios locales
-      let localServices: MarineService[] = [];
-      try {
-        if (checkStorageAvailability()) {
-          localServices = JSON.parse(localStorage.getItem('services') || '[]');
-        } else {
-          const db = await initDB();
-          if (db) {
-            localServices = await db.getAll(STORE_NAME);
-          }
-        }
-        console.log('Servicios locales obtenidos:', localServices);
-      } catch (localError) {
-        console.error('Error obteniendo servicios locales:', localError);
-        localServices = [];
-      }
-      
-      // Filtrar servicios locales no sincronizados
-      const unsyncedServices = localServices.filter(
-        local => !cloudServices.some(cloud => cloud.id === local.id) && !local.synced
-      );
-      console.log('Servicios no sincronizados:', unsyncedServices);
-      
-      // Combinar servicios de la nube con los no sincronizados
-      const combinedServices = [...cloudServices, ...unsyncedServices];
-      console.log('Servicios combinados:', combinedServices);
-      
-      // Guardar servicios combinados localmente
-      const saved = await saveToLocalStorage(combinedServices);
-      if (!saved) {
-        console.error('Error guardando servicios combinados localmente');
-        throw new Error('No se pudieron guardar los datos localmente');
-      }
-
-      // Actualizar estado
-      setServices(combinedServices);
-      
-      if (showNotification) {
-        const message = unsyncedServices.length > 0 
-          ? `${cloudServices.length} registros actualizados y ${unsyncedServices.length} pendientes de sincronizar`
-          : `${cloudServices.length} registros actualizados desde la nube`;
-        toast.success(message);
-      }
-    } catch (error: any) {
-      console.error('Error al obtener servicios de la nube:', error);
-      if (showNotification) {
-        const errorMessage = error.message || 'Error desconocido';
-        toast.error(`Error al actualizar desde la nube: ${errorMessage}`);
-      }
-    }
-  };
+  }, [user]);
 
   const syncServices = async () => {
     if (!isOnline || !user) {
-      toast.error('No hay conexión a Internet. Intente más tarde.');
+      toast.error('No hay conexión a Internet');
       return;
     }
 
     setIsSyncing(true);
     try {
-      // Obtener servicios locales no sincronizados
-      let localServices: MarineService[] = [];
-      
-      if (checkStorageAvailability()) {
-        localServices = JSON.parse(localStorage.getItem('services') || '[]');
-      } else {
-        const db = await initDB();
-        if (db) {
-          localServices = await db.getAll(STORE_NAME);
-        }
-      }
-      
-      const unsyncedServices = localServices.filter(service => !service.synced);
-      
-      if (unsyncedServices.length === 0) {
-        toast.info('No hay registros pendientes para sincronizar');
-        return;
-      }
-
-      // Sincronizar servicios no sincronizados
-      const syncedServices = await syncService.syncAllServices(unsyncedServices);
-      
-      // Obtener servicios desde la nube
+      // Obtener servicios de Supabase
       const cloudServices = await syncService.fetchAllServices();
       
-      // Guardar servicios actualizados localmente
-      const saved = await saveToLocalStorage(cloudServices);
-      if (saved) {
-        setServices(cloudServices);
-        toast.success(`${unsyncedServices.length} registro(s) sincronizado(s) exitosamente`);
-      } else {
-        throw new Error('No se pudieron guardar los datos actualizados localmente');
+      if (!Array.isArray(cloudServices)) {
+        throw new Error('Error al obtener datos de la nube');
       }
-    } catch (error) {
-      console.error('Error durante la sincronización:', error);
-      toast.error('Error al sincronizar. Intente nuevamente');
+      
+      // Guardar en IndexedDB
+      const saved = await saveToLocalDB(cloudServices);
+      if (!saved) {
+        throw new Error('Error guardando datos localmente');
+      }
+      
+      setServices(cloudServices);
+      toast.success('Datos sincronizados correctamente');
+    } catch (error: any) {
+      console.error('Error en sincronización:', error);
+      toast.error(`Error al sincronizar: ${error.message}`);
+      
+      // Intentar cargar datos locales como fallback
+      try {
+        const localServices = await loadFromLocalDB();
+        setServices(localServices);
+      } catch (localError) {
+        console.error('Error cargando datos locales:', localError);
+      }
     } finally {
       setIsSyncing(false);
     }
@@ -237,87 +150,53 @@ export const useRecordsSync = () => {
     setIsEditing(true);
   };
 
-  const uploadImageToSupabase = async (file: File | null): Promise<string | null> => {
-    if (!file || !isOnline || !user) return null;
-    
-    try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${uuidv4()}.${fileExt}`;
-      const filePath = `${user.id}/${fileName}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('service_photos')
-        .upload(filePath, file);
-        
-      if (uploadError) {
-        console.error('Error uploading image:', uploadError);
-        throw uploadError;
-      }
-      
-      const { data } = supabase.storage
-        .from('service_photos')
-        .getPublicUrl(filePath);
-        
-      return data.publicUrl;
-    } catch (error) {
-      console.error('Error uploading to Supabase:', error);
-      return null;
-    }
-  };
-  
-  const dataURItoBlob = (dataURI: string): File | null => {
-    if (!dataURI || !dataURI.startsWith('data:')) return null;
-    
-    try {
-      const arr = dataURI.split(',');
-      const mime = arr[0].match(/:(.*?);/)?.[1];
-      const bstr = atob(arr[1]);
-      let n = bstr.length;
-      const u8arr = new Uint8Array(n);
-      
-      while (n--) {
-        u8arr[n] = bstr.charCodeAt(n);
-      }
-      
-      return new File([u8arr], 'image.jpg', { type: mime });
-    } catch (error) {
-      console.error('Error converting data URI to blob:', error);
-      return null;
-    }
-  };
-
   const handleUpdate = async (updatedData: ServiceFormData) => {
     if (!editingService) return;
 
+    setIsSubmitting(true);
     try {
-      setIsSubmitting(true);
-      
-      const updatedService: MarineService = {
-        ...editingService,
-        clientName: updatedData.clientName,
-        vesselName: updatedData.vesselName,
-        details: updatedData.details,
-        photoUrl: updatedData.photoUrl,
-        photoUrls: updatedData.photoUrls || [],
-        updatedAt: new Date().toISOString(),
-        synced: false
-      };
+      // Actualizar en Supabase primero si hay conexión
+      if (isOnline && user) {
+        const savedService = await syncService.saveService({
+          ...editingService,
+          ...updatedData,
+          updatedAt: new Date().toISOString()
+        });
 
-      const updatedServices = services.map(service => 
-        service.id === updatedService.id ? updatedService : service
-      );
+        if (savedService) {
+          // Actualizar localmente
+          const updatedServices = services.map(s => 
+            s.id === savedService.id ? savedService : s
+          );
 
-      const saved = await saveToLocalStorage(updatedServices);
-      if (saved) {
-        setServices(updatedServices);
-        setEditingService(null);
-        setIsEditing(false);
-        toast.success('Registro actualizado exitosamente');
+          await saveToLocalDB(updatedServices);
+          setServices(updatedServices);
+          toast.success('Registro actualizado correctamente');
+        }
       } else {
-        throw new Error('No se pudo guardar la actualización localmente');
+        // Actualizar solo localmente
+        const updatedService: MarineService = {
+          ...editingService,
+          ...updatedData,
+          updatedAt: new Date().toISOString(),
+          synced: false
+        };
+
+        const updatedServices = services.map(s => 
+          s.id === updatedService.id ? updatedService : s
+        );
+
+        const saved = await saveToLocalDB(updatedServices);
+        if (!saved) throw new Error('Error guardando localmente');
+
+        setServices(updatedServices);
+        toast.success('Registro actualizado localmente');
       }
+
+      setEditingService(null);
+      setIsEditing(false);
     } catch (error) {
-      console.error('Error actualizando servicio:', error);
+      console.error('Error en actualización:', error);
       toast.error('Error al actualizar el registro');
     } finally {
       setIsSubmitting(false);
@@ -326,21 +205,18 @@ export const useRecordsSync = () => {
 
   const handleDelete = async (id: string) => {
     try {
-      const updatedServices = services.filter(service => service.id !== id);
-      const saved = await saveToLocalStorage(updatedServices);
-      
-      if (saved) {
-        setServices(updatedServices);
-        
-        if (isOnline && user) {
-          await syncService.deleteService(id);
-          toast.success('Registro eliminado exitosamente');
-        } else {
-          toast.info('Registro eliminado localmente. Se sincronizará cuando haya conexión');
-        }
-      } else {
-        throw new Error('No se pudo eliminar el registro localmente');
+      if (isOnline && user) {
+        // Eliminar en Supabase primero
+        await syncService.deleteService(id);
       }
+
+      // Eliminar localmente
+      const updatedServices = services.filter(s => s.id !== id);
+      const saved = await saveToLocalDB(updatedServices);
+      if (!saved) throw new Error('Error eliminando localmente');
+
+      setServices(updatedServices);
+      toast.success(isOnline ? 'Registro eliminado' : 'Registro eliminado localmente');
     } catch (error) {
       console.error('Error al eliminar:', error);
       toast.error('Error al eliminar el registro');
@@ -349,15 +225,15 @@ export const useRecordsSync = () => {
 
   const refreshServices = async () => {
     if (!isOnline) {
-      toast.error('No hay conexión a Internet para actualizar datos');
+      toast.error('Sin conexión a Internet');
       return;
     }
     
     setIsLoading(true);
     try {
-      await fetchServicesFromCloud(true);
+      await syncServices();
     } catch (error) {
-      toast.error('Error al actualizar desde la nube');
+      toast.error('Error al actualizar datos');
     } finally {
       setIsLoading(false);
     }
@@ -374,10 +250,9 @@ export const useRecordsSync = () => {
     setIsEditing,
     setEditingService,
     syncServices,
-    refreshServices,
+    refreshServices: syncServices,
     handleEdit,
     handleUpdate,
-    handleDelete,
-    uploadImageToSupabase
+    handleDelete
   };
 };

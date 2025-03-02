@@ -15,29 +15,17 @@ export const supabase = createClient<Database>(
     auth: {
       persistSession: true,
       storageKey: 'marine-data-auth',
-      storage: {
-        getItem: (key) => {
-          try {
-            const value = localStorage.getItem(key);
-            return value ? JSON.parse(value) : null;
-          } catch {
-            return null;
-          }
-        },
-        setItem: (key, value) => {
-          try {
-            localStorage.setItem(key, JSON.stringify(value));
-          } catch (error) {
-            console.error('Error storing auth state:', error);
-          }
-        },
-        removeItem: (key) => {
-          try {
-            localStorage.removeItem(key);
-          } catch (error) {
-            console.error('Error removing auth state:', error);
-          }
-        }
+      autoRefreshToken: true,
+      detectSessionInUrl: true
+    },
+    global: {
+      headers: {
+        'X-Client-Info': 'marine-data-minder-android'
+      }
+    },
+    realtime: {
+      params: {
+        eventsPerSecond: 2
       }
     }
   }

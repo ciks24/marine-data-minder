@@ -18,8 +18,15 @@ export const syncService = {
         return photoUrl; // No es una imagen en formato data URL
       }
 
+      // Reducir el tamaño de la imagen antes de subirla
+      const compressedImage = await this.compressImage(photoUrl);
+      if (!compressedImage) {
+        console.error('Error al comprimir la imagen');
+        return null;
+      }
+
       // Convertir data URL a File
-      const res = await fetch(photoUrl);
+      const res = await fetch(compressedImage);
       const blob = await res.blob();
       const file = new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
 
@@ -47,6 +54,48 @@ export const syncService = {
       return publicUrl;
     } catch (error) {
       console.error('Error en el proceso de subida de imagen:', error);
+      return null;
+    }
+  },
+
+  /**
+   * Función para comprimir imágenes
+   * @param dataUrl - La URL de datos de la imagen
+   * @param maxWidth - Ancho máximo para la imagen comprimida
+   * @returns La URL de la imagen comprimida
+   */
+  async compressImage(dataUrl: string, maxWidth = 800): Promise<string | null> {
+    try {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          // Calcular nuevas dimensiones manteniendo la proporción
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(null);
+            return;
+          }
+
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.7)); // Comprimir con calidad 0.7
+        };
+        img.onerror = () => resolve(null);
+        img.src = dataUrl;
+      });
+    } catch (error) {
+      console.error('Error comprimiendo imagen:', error);
       return null;
     }
   },
@@ -205,65 +254,61 @@ export const syncService = {
   },
 
   /**
-   * Descarga todos los servicios desde Supabase
-   * @returns Lista de servicios desde Supabase
+   * Obtiene todos los servicios desde Supabase
+   * @returns Lista de servicios
    */
   async fetchAllServices(): Promise<MarineService[]> {
     try {
-      const { data: services, error } = await supabase
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) {
+        throw new Error('Usuario no autenticado');
+      }
+
+      const { data, error } = await supabase
         .from('marine_services')
         .select('*')
-        .order('start_date_time', { ascending: false });
+        .eq('user_id', user.user.id)
+        .order('updated_at', { ascending: false });
 
       if (error) {
-        console.error('Error al obtener servicios de Supabase:', error);
+        console.error('Error obteniendo servicios:', error);
         throw new Error(`Error al obtener servicios: ${error.message}`);
       }
 
-      if (!services || !Array.isArray(services)) {
-        console.warn('No se encontraron servicios en Supabase o formato inválido');
-        return [];
+      if (!data || !Array.isArray(data)) {
+        throw new Error('No se recibieron datos válidos del servidor');
       }
 
-      // Convertir y validar datos a formato MarineService
-      return services.map(item => {
-        // Asegurarse de que todos los campos requeridos existan
+      // Convertir y validar los datos
+      return data.map(item => {
         if (!item.id || !item.start_date_time) {
           console.warn('Servicio con datos incompletos:', item);
-          return null;
         }
 
-        try {
-          return {
-            id: item.id,
-            clientName: item.client_name || '',
-            vesselName: item.vessel_name || '',
-            startDateTime: item.start_date_time,
-            details: item.details || '',
-            photoUrl: item.photo_url || '',
-            // Asegurarse de que photo_urls sea un array
-            photoUrls: Array.isArray(item.photo_urls) ? item.photo_urls : [],
-            createdAt: item.created_at || item.start_date_time,
-            updatedAt: item.updated_at || item.start_date_time,
-            synced: true
-          };
-        } catch (error) {
-          console.error('Error procesando servicio:', error);
-          return null;
-        }
-      }).filter((service): service is MarineService => service !== null);
-    } catch (error) {
-      console.error('Error en el proceso de obtención de servicios:', error);
-      throw error;
+        return {
+          id: item.id,
+          clientName: item.client_name || '',
+          vesselName: item.vessel_name || '',
+          startDateTime: item.start_date_time,
+          details: item.details || '',
+          photoUrl: item.photo_url || '',
+          photoUrls: Array.isArray(item.photo_urls) ? item.photo_urls.filter(url => url && typeof url === 'string') : [],
+          createdAt: item.created_at || item.start_date_time,
+          updatedAt: item.updated_at || item.start_date_time,
+          synced: true
+        };
+      });
+    } catch (error: any) {
+      console.error('Error en fetchAllServices:', error);
+      throw new Error(`Error al sincronizar con el servidor: ${error.message}`);
     }
   },
 
   /**
    * Elimina un servicio de Supabase
    * @param id - ID del servicio a eliminar
-   * @returns true si la eliminación fue exitosa
    */
-  async deleteService(id: string): Promise<boolean> {
+  async deleteService(id: string): Promise<void> {
     try {
       const { error } = await supabase
         .from('marine_services')
@@ -271,14 +316,12 @@ export const syncService = {
         .eq('id', id);
 
       if (error) {
-        console.error('Error al eliminar el servicio de Supabase:', error);
-        return false;
+        console.error('Error eliminando servicio:', error);
+        throw error;
       }
-
-      return true;
     } catch (error) {
-      console.error('Error en el proceso de eliminación del servicio:', error);
-      return false;
+      console.error('Error en deleteService:', error);
+      throw error;
     }
   }
 };
