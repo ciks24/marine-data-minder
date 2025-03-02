@@ -3,6 +3,21 @@ import { MarineService } from '@/types/service';
 
 type ExportTimeRange = 'today' | 'week' | 'month' | 'all' | 'selected' | 'byClient';
 
+// Función auxiliar para formatear la fecha y hora
+const formatDateTime = (dateStr: string) => {
+  const date = new Date(dateStr);
+  // Ajustar a la zona horaria local
+  const localDate = new Date(date.getTime());
+  return localDate.toLocaleString('es-ES', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+};
+
 export const exportToExcel = async (services: MarineService[], timeRange: ExportTimeRange = 'all', selectedIds: string[] = []) => {
   // Filter services based on time range
   const filtered = filterServicesByTimeRange(services, timeRange, selectedIds);
@@ -19,7 +34,7 @@ export const exportToExcel = async (services: MarineService[], timeRange: Export
   worksheet.columns = [
     { header: 'Nombre de Cliente', key: 'clientName', width: 30 },
     { header: 'Embarcación', key: 'vesselName', width: 30 },
-    { header: 'Fecha y Hora', key: 'startDateTime', width: 20 },
+    { header: 'Fecha y Hora', key: 'startDateTime', width: 25 },
     { header: 'Detalle', key: 'details', width: 50 },
     { header: 'Cantidad de Fotos', key: 'photosCount', width: 15 },
     { header: 'Enlaces a Fotos', key: 'photoLinks', width: 50 }
@@ -38,7 +53,7 @@ export const exportToExcel = async (services: MarineService[], timeRange: Export
     worksheet.addRow({
       clientName: service.clientName,
       vesselName: service.vesselName,
-      startDateTime: new Date(service.startDateTime).toLocaleString('es-ES'),
+      startDateTime: formatDateTime(service.startDateTime),
       details: service.details,
       photosCount: getPhotosCount(service),
       photoLinks: getPhotoLinks(service).join(', ')
@@ -90,7 +105,12 @@ const filterServicesByTimeRange = (
   if (timeRange === 'today') {
     return services.filter(service => {
       const serviceDate = new Date(service.startDateTime);
-      return serviceDate >= today;
+      const serviceDateOnly = new Date(
+        serviceDate.getFullYear(),
+        serviceDate.getMonth(),
+        serviceDate.getDate()
+      );
+      return serviceDateOnly.getTime() === today.getTime();
     });
   }
   

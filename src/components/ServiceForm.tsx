@@ -50,15 +50,13 @@ const ServiceForm = ({
   useEffect(() => {
     if (!isEditMode) {
       const now = new Date();
-      // Asegurar que la fecha se guarde con la zona horaria local correcta
-      const localDate = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
-      const localISOString = localDate.toISOString().slice(0, 16);
+      // Guardar la fecha y hora actual sin ajustes de zona horaria
+      const localISOString = now.toISOString().slice(0, 16);
       setValue('startDateTime', localISOString);
     } else if (initialData?.startDateTime) {
-      // Para modo edición, convertir la fecha almacenada a formato local
-      const storedDate = new Date(initialData.startDateTime);
-      const localDate = new Date(storedDate.getTime() - (storedDate.getTimezoneOffset() * 60000));
-      const localISOString = localDate.toISOString().slice(0, 16);
+      // Para modo edición, mantener la fecha original
+      const date = new Date(initialData.startDateTime);
+      const localISOString = date.toISOString().slice(0, 16);
       setValue('startDateTime', localISOString);
     }
   }, [isEditMode, initialData, setValue]);
