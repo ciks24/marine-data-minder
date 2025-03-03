@@ -48,6 +48,7 @@ const EditServiceDialog: React.FC<EditServiceDialogProps> = ({
   };
 
   const uniquePhotoUrls = prepareUniquePhotoUrls();
+  console.log('Photos en EditServiceDialog:', uniquePhotoUrls);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

@@ -79,35 +79,57 @@ const ServiceForm = ({
   useEffect(() => {
     // Initialize photos from initial data without duplicating
     if (initialData) {
-      const photosList: string[] = [];
+      // Usamos un Set para asegurar que no haya duplicados
+      const uniquePhotosSet = new Set<string>();
       
       // Handle multiple photos if available
       if (initialData.photoUrls && initialData.photoUrls.length > 0) {
         // Add all unique photos from photoUrls
         initialData.photoUrls.forEach(url => {
-          if (!photosList.includes(url)) {
-            photosList.push(url);
+          if (url && typeof url === 'string') {
+            uniquePhotosSet.add(url);
           }
         });
       }
       
-      // Handle legacy single photo - only add if it's not already in the list
-      if (initialData.photoUrl && initialData.photoUrl.trim() !== '' && !photosList.includes(initialData.photoUrl)) {
-        photosList.push(initialData.photoUrl);
+      // Handle legacy single photo - only add if it's not already in the set
+      if (initialData.photoUrl && initialData.photoUrl.trim() !== '') {
+        uniquePhotosSet.add(initialData.photoUrl);
       }
+      
+      // Convertir a array
+      const photosList = Array.from(uniquePhotosSet);
+      console.log('Fotos inicializadas en ServiceForm:', photosList.length);
       
       setSelectedPhotos(photosList);
     }
   }, [initialData]);
 
+  /**
+   * Genera un hash simple para detectar duplicados en data URLs
+   * @param str - String a hashear
+   * @returns Hash como string
+   */
+  const generateImageHash = (str: string): string => {
+    // Para imágenes data:URL, usamos los primeros 500 caracteres
+    const sample = str.substring(0, 500);
+    
+    // Algoritmo simple de hashing
+    let hash = 0;
+    for (let i = 0; i < sample.length; i++) {
+      hash = ((hash << 5) - hash) + sample.charCodeAt(i);
+      hash |= 0; // Convertir a entero de 32 bits
+    }
+    return hash.toString(16);
+  };
+
   // Función para verificar si una imagen ya existe en la selección
   const isDuplicatePhoto = (newPhotoUrl: string): boolean => {
-    // Para data URLs, comparamos una muestra de los primeros 100 caracteres
-    // Esto es suficiente para detectar duplicados sin comparar el blob completo
+    // Para data URLs, comparamos un hash
     if (newPhotoUrl.startsWith('data:image')) {
-      const sample = newPhotoUrl.substring(0, 100);
+      const newHash = generateImageHash(newPhotoUrl);
       return selectedPhotos.some(url => 
-        url.startsWith('data:image') && url.substring(0, 100) === sample
+        url.startsWith('data:image') && generateImageHash(url) === newHash
       );
     }
     // Para URLs normales, comparamos la cadena completa
@@ -123,6 +145,9 @@ const ServiceForm = ({
         // Verificar duplicados antes de agregar
         if (!isDuplicatePhoto(photoUrl)) {
           setSelectedPhotos(prev => [...prev, photoUrl]);
+          console.log('Foto de galería añadida');
+        } else {
+          console.log('Foto de galería duplicada, no se añadió');
         }
         // Limpiar el input para permitir seleccionar el mismo archivo nuevamente
         e.target.value = '';
@@ -140,6 +165,9 @@ const ServiceForm = ({
         // Verificar duplicados antes de agregar
         if (!isDuplicatePhoto(photoUrl)) {
           setSelectedPhotos(prev => [...prev, photoUrl]);
+          console.log('Foto de cámara añadida');
+        } else {
+          console.log('Foto de cámara duplicada, no se añadió');
         }
         // Limpiar el input para permitir capturar otra foto
         e.target.value = '';
@@ -156,14 +184,19 @@ const ServiceForm = ({
     // Filter out photos marked for removal
     const updatedPhotos = selectedPhotos.filter((_, index) => !photosToRemove.includes(index));
     
+    // Eliminar posibles duplicados antes de enviar
+    const uniquePhotosSet = new Set(updatedPhotos);
+    const uniquePhotos = Array.from(uniquePhotosSet);
+    
     // Handle backward compatibility for single photo
     const formData = {
       ...data,
       startDateTime: isoString,
-      photoUrl: updatedPhotos.length > 0 ? updatedPhotos[0] : '',
-      photoUrls: updatedPhotos
+      photoUrl: uniquePhotos.length > 0 ? uniquePhotos[0] : '',
+      photoUrls: uniquePhotos
     };
     
+    console.log('Enviando formulario con fotos:', uniquePhotos.length);
     onSubmit(formData);
   };
 

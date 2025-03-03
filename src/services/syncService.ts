@@ -43,6 +43,15 @@ export const syncService = {
         });
 
       if (error) {
+        // Si el error es porque el archivo ya existe, intentamos obtener su URL
+        if (error.message.includes('already exists')) {
+          console.warn('La imagen ya existe, obteniendo URL pública...');
+          const { data: { publicUrl } } = supabase.storage
+            .from('service_photos')
+            .getPublicUrl(filePath);
+          return publicUrl;
+        }
+        
         console.error('Error al subir la imagen:', error);
         return null;
       }
@@ -102,6 +111,25 @@ export const syncService = {
   },
 
   /**
+   * Genera un hash más robusto para detectar duplicados
+   * @param str - String a convertir en hash
+   * @returns Hash como string
+   */
+  generateImageHash(str: string): string {
+    // Para imágenes data:URL, usamos los primeros 1000 caracteres que contienen la
+    // información de cabecera y parte de los datos
+    const sample = str.substring(0, 1000);
+    
+    // Algoritmo simple de hashing
+    let hash = 0;
+    for (let i = 0; i < sample.length; i++) {
+      hash = ((hash << 5) - hash) + sample.charCodeAt(i);
+      hash |= 0; // Convertir a entero de 32 bits
+    }
+    return hash.toString(16); // Convertir a hexadecimal para hacerlo más compacto
+  },
+
+  /**
    * Sube múltiples imágenes al almacenamiento de Supabase
    * @param photoUrls - Array de URLs de datos de las imágenes (dataURL)
    * @returns Array de URLs públicas de las imágenes almacenadas
@@ -109,11 +137,39 @@ export const syncService = {
   async uploadMultiplePhotos(photoUrls: string[]): Promise<string[]> {
     if (!photoUrls || photoUrls.length === 0) return [];
     
-    const uploadPromises = photoUrls.map(url => this.uploadPhoto(url));
+    // Eliminar duplicados usando nuestro sistema de hash
+    const uniqueUrls = new Map<string, string>(); // hash -> url
+    
+    photoUrls.forEach(url => {
+      if (url && typeof url === 'string') {
+        // Si es una data URL, usamos hash para detectar duplicados
+        if (url.startsWith('data:image')) {
+          const hash = this.generateImageHash(url);
+          if (!uniqueUrls.has(hash)) {
+            uniqueUrls.set(hash, url);
+          }
+        } 
+        // Si es una URL ya subida, la incluimos directamente
+        else if (!Array.from(uniqueUrls.values()).includes(url)) {
+          uniqueUrls.set(url, url); // Usamos la URL como su propio hash
+        }
+      }
+    });
+    
+    // Convertir a array de URLs únicas
+    const deduplicatedUrls = Array.from(uniqueUrls.values());
+    console.log(`Detectadas ${photoUrls.length - deduplicatedUrls.length} imágenes duplicadas`);
+    
+    // Solo subir las que son data URLs
+    const dataUrls = deduplicatedUrls.filter(url => url.startsWith('data:image'));
+    const existingUrls = deduplicatedUrls.filter(url => !url.startsWith('data:image'));
+    
+    // Subir todas las imágenes únicas
+    const uploadPromises = dataUrls.map(url => this.uploadPhoto(url));
     const results = await Promise.all(uploadPromises);
     
-    // Filter out any null results
-    return results.filter(url => url !== null) as string[];
+    // Filtrar resultados nulos y combinar con URLs existentes
+    return [...existingUrls, ...results.filter(url => url !== null) as string[]];
   },
 
   /**
@@ -133,57 +189,51 @@ export const syncService = {
         throw new Error('Datos de servicio incompletos');
       }
 
-      // Crear una colección de URLs únicas para evitar duplicados
-      const uniquePhotos = new Set<string>();
+      // Preparar fotos para subir (solo las que son data URLs)
+      let photosToUpload: string[] = [];
+      let existingPhotoUrls: string[] = [];
       
-      // Recopilar todas las fotos para subir (solo las que son data URLs)
-      const photosToUpload: string[] = [];
+      // Procesar todas las fotos (unificando photoUrl antiguo y photoUrls nuevo)
+      if (service.photoUrl && typeof service.photoUrl === 'string') {
+        if (service.photoUrl.startsWith('data:image')) {
+          photosToUpload.push(service.photoUrl);
+        } else {
+          existingPhotoUrls.push(service.photoUrl);
+        }
+      }
       
-      // Procesar photoUrls (nueva implementación)
       if (Array.isArray(service.photoUrls)) {
         service.photoUrls.forEach(url => {
           if (url && typeof url === 'string') {
-            // Si es una nueva foto para subir
             if (url.startsWith('data:image')) {
-              // Crear un hash simple para identificar duplicados en data URLs
-              const urlHash = this.simpleHash(url.substring(0, 100)); 
-              if (!uniquePhotos.has(urlHash)) {
-                uniquePhotos.add(urlHash);
-                photosToUpload.push(url);
-              }
-            } 
-            // Si es una URL ya subida
-            else if (!uniquePhotos.has(url)) {
-              uniquePhotos.add(url);
+              photosToUpload.push(url);
+            } else if (!existingPhotoUrls.includes(url)) {
+              existingPhotoUrls.push(url);
             }
           }
         });
       }
       
-      // Verificar photoUrl legacy y agregarlo solo si no está ya incluido
-      if (service.photoUrl && typeof service.photoUrl === 'string') {
-        if (service.photoUrl.startsWith('data:image')) {
-          const urlHash = this.simpleHash(service.photoUrl.substring(0, 100));
-          if (!uniquePhotos.has(urlHash)) {
-            uniquePhotos.add(urlHash);
-            photosToUpload.push(service.photoUrl);
-          }
-        } else if (!uniquePhotos.has(service.photoUrl)) {
-          uniquePhotos.add(service.photoUrl);
-        }
-      }
+      // Eliminar duplicados en las fotos a subir usando nuestro sistema de hash
+      const uniqueDataUrls = new Map<string, string>(); // hash -> url
       
-      // Convertir el Set a un Array para URLs ya subidas
-      const existingPhotoUrls = Array.from(uniquePhotos).filter(url => !url.startsWith('data:'));
+      photosToUpload.forEach(url => {
+        const hash = this.generateImageHash(url);
+        if (!uniqueDataUrls.has(hash)) {
+          uniqueDataUrls.set(hash, url);
+        }
+      });
+      
+      console.log(`Eliminadas ${photosToUpload.length - uniqueDataUrls.size} imágenes duplicadas antes de subir`);
+      
+      // Convertir a array
+      photosToUpload = Array.from(uniqueDataUrls.values());
       
       // Subir todas las fotos nuevas
       let uploadedUrls: string[] = [];
       if (photosToUpload.length > 0) {
         try {
           uploadedUrls = await this.uploadMultiplePhotos(photosToUpload);
-          if (uploadedUrls.length !== photosToUpload.length) {
-            console.warn(`No todas las fotos se pudieron subir: ${uploadedUrls.length} de ${photosToUpload.length}`);
-          }
         } catch (photoError: any) {
           console.error('Error subiendo fotos:', photoError);
           // Continuar con el guardado aunque fallen las fotos
@@ -191,7 +241,17 @@ export const syncService = {
       }
       
       // Combinar fotos existentes con las nuevas subidas (sin duplicados)
-      const finalPhotoUrls = [...existingPhotoUrls, ...uploadedUrls].filter(Boolean);
+      const finalPhotoUrls = [...existingPhotoUrls];
+      
+      // Agregar solo URLs nuevas que no estén ya en las existentes
+      uploadedUrls.forEach(url => {
+        if (url && !finalPhotoUrls.includes(url)) {
+          finalPhotoUrls.push(url);
+        }
+      });
+      
+      // Eliminar valores nulos o indefinidos
+      const cleanedPhotoUrls = finalPhotoUrls.filter(Boolean);
       
       // Preparar el servicio para guardar
       const serviceToSave = {
@@ -200,12 +260,14 @@ export const syncService = {
         vessel_name: service.vesselName || '',
         start_date_time: service.startDateTime,
         details: service.details || '',
-        photo_url: finalPhotoUrls[0] || '', // Primera foto como foto principal
-        photo_urls: finalPhotoUrls, // Todas las fotos en el array
+        photo_url: cleanedPhotoUrls[0] || '', // Primera foto como foto principal
+        photo_urls: cleanedPhotoUrls, // Todas las fotos en el array
         created_at: service.createdAt || service.startDateTime,
         updated_at: new Date().toISOString(),
         user_id: user.id
       };
+
+      console.log('Guardando servicio con fotos:', serviceToSave.photo_urls);
 
       // Guardar en Supabase con reintentos
       let attempts = 0;
@@ -258,21 +320,6 @@ export const syncService = {
       console.error('Error en saveService:', error);
       throw error;
     }
-  },
-
-  /**
-   * Crea un hash simple para identificar duplicados en data URLs
-   * @param str - String a hashear
-   * @returns Hash simple
-   */
-  simpleHash(str: string): string {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32bit integer
-    }
-    return hash.toString();
   },
 
   /**
@@ -348,6 +395,19 @@ export const syncService = {
           console.warn('Servicio con datos incompletos:', item);
         }
 
+        // Eliminar posibles duplicados en photo_urls
+        let uniquePhotoUrls: string[] = [];
+        if (Array.isArray(item.photo_urls)) {
+          const seenUrls = new Set<string>();
+          uniquePhotoUrls = item.photo_urls.filter(url => {
+            if (url && typeof url === 'string' && !seenUrls.has(url)) {
+              seenUrls.add(url);
+              return true;
+            }
+            return false;
+          });
+        }
+
         return {
           id: item.id,
           clientName: item.client_name || '',
@@ -355,7 +415,7 @@ export const syncService = {
           startDateTime: item.start_date_time,
           details: item.details || '',
           photoUrl: item.photo_url || '',
-          photoUrls: Array.isArray(item.photo_urls) ? item.photo_urls.filter(url => url && typeof url === 'string') : [],
+          photoUrls: uniquePhotoUrls,
           createdAt: item.created_at || item.start_date_time,
           updatedAt: item.updated_at || item.start_date_time,
           synced: true
