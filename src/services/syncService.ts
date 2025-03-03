@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { MarineService, ServiceFormData } from '@/types/service';
@@ -132,35 +133,48 @@ export const syncService = {
         throw new Error('Datos de servicio incompletos');
       }
 
+      // Crear una colección de URLs únicas para evitar duplicados
+      const uniquePhotos = new Set<string>();
+      
       // Recopilar todas las fotos para subir (solo las que son data URLs)
       const photosToUpload: string[] = [];
       
-      // Manejar las fotos múltiples, evitando duplicados
-      const existingPhotos = new Set<string>();
-      
-      // Validar y procesar photoUrl legacy
-      if (service.photoUrl && typeof service.photoUrl === 'string') {
-        if (service.photoUrl.startsWith('data:image')) {
-          photosToUpload.push(service.photoUrl);
-        } else if (!existingPhotos.has(service.photoUrl)) {
-          existingPhotos.add(service.photoUrl);
-        }
-      }
-      
-      // Validar y procesar photoUrls
+      // Procesar photoUrls (nueva implementación)
       if (Array.isArray(service.photoUrls)) {
         service.photoUrls.forEach(url => {
           if (url && typeof url === 'string') {
+            // Si es una nueva foto para subir
             if (url.startsWith('data:image')) {
-              if (!photosToUpload.includes(url)) {
+              // Crear un hash simple para identificar duplicados en data URLs
+              const urlHash = this.simpleHash(url.substring(0, 100)); 
+              if (!uniquePhotos.has(urlHash)) {
+                uniquePhotos.add(urlHash);
                 photosToUpload.push(url);
               }
-            } else if (!existingPhotos.has(url)) {
-              existingPhotos.add(url);
+            } 
+            // Si es una URL ya subida
+            else if (!uniquePhotos.has(url)) {
+              uniquePhotos.add(url);
             }
           }
         });
       }
+      
+      // Verificar photoUrl legacy y agregarlo solo si no está ya incluido
+      if (service.photoUrl && typeof service.photoUrl === 'string') {
+        if (service.photoUrl.startsWith('data:image')) {
+          const urlHash = this.simpleHash(service.photoUrl.substring(0, 100));
+          if (!uniquePhotos.has(urlHash)) {
+            uniquePhotos.add(urlHash);
+            photosToUpload.push(service.photoUrl);
+          }
+        } else if (!uniquePhotos.has(service.photoUrl)) {
+          uniquePhotos.add(service.photoUrl);
+        }
+      }
+      
+      // Convertir el Set a un Array para URLs ya subidas
+      const existingPhotoUrls = Array.from(uniquePhotos).filter(url => !url.startsWith('data:'));
       
       // Subir todas las fotos nuevas
       let uploadedUrls: string[] = [];
@@ -176,8 +190,8 @@ export const syncService = {
         }
       }
       
-      // Combinar fotos existentes con las nuevas subidas
-      const finalPhotoUrls = [...existingPhotos, ...uploadedUrls].filter(Boolean);
+      // Combinar fotos existentes con las nuevas subidas (sin duplicados)
+      const finalPhotoUrls = [...existingPhotoUrls, ...uploadedUrls].filter(Boolean);
       
       // Preparar el servicio para guardar
       const serviceToSave = {
@@ -244,6 +258,21 @@ export const syncService = {
       console.error('Error en saveService:', error);
       throw error;
     }
+  },
+
+  /**
+   * Crea un hash simple para identificar duplicados en data URLs
+   * @param str - String a hashear
+   * @returns Hash simple
+   */
+  simpleHash(str: string): string {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return hash.toString();
   },
 
   /**

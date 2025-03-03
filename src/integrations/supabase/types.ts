@@ -16,8 +16,9 @@ export type Database = {
           details: string
           id: string
           photo_url: string | null
-          photo_urls: string[] | null
+          photo_urls: string[]
           start_date_time: string
+          synced: boolean
           updated_at: string | null
           user_id: string | null
           vessel_name: string
@@ -28,8 +29,9 @@ export type Database = {
           details: string
           id?: string
           photo_url?: string | null
-          photo_urls?: string[] | null
+          photo_urls?: string[]
           start_date_time: string
+          synced?: boolean
           updated_at?: string | null
           user_id?: string | null
           vessel_name: string
@@ -40,8 +42,9 @@ export type Database = {
           details?: string
           id?: string
           photo_url?: string | null
-          photo_urls?: string[] | null
+          photo_urls?: string[]
           start_date_time?: string
+          synced?: boolean
           updated_at?: string | null
           user_id?: string | null
           vessel_name?: string

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { ServiceFormData } from '../types/service';
@@ -76,18 +77,13 @@ const ServiceForm = ({
   const formData = watch();
 
   useEffect(() => {
-    // Initialize photos from initial data
+    // Initialize photos from initial data without duplicating
     if (initialData) {
       const photosList: string[] = [];
       
-      // Handle legacy single photo
-      if (initialData.photoUrl && initialData.photoUrl.trim() !== '') {
-        photosList.push(initialData.photoUrl);
-      }
-      
       // Handle multiple photos if available
       if (initialData.photoUrls && initialData.photoUrls.length > 0) {
-        // Merge without duplicates
+        // Add all unique photos from photoUrls
         initialData.photoUrls.forEach(url => {
           if (!photosList.includes(url)) {
             photosList.push(url);
@@ -95,9 +91,28 @@ const ServiceForm = ({
         });
       }
       
+      // Handle legacy single photo - only add if it's not already in the list
+      if (initialData.photoUrl && initialData.photoUrl.trim() !== '' && !photosList.includes(initialData.photoUrl)) {
+        photosList.push(initialData.photoUrl);
+      }
+      
       setSelectedPhotos(photosList);
     }
   }, [initialData]);
+
+  // Función para verificar si una imagen ya existe en la selección
+  const isDuplicatePhoto = (newPhotoUrl: string): boolean => {
+    // Para data URLs, comparamos una muestra de los primeros 100 caracteres
+    // Esto es suficiente para detectar duplicados sin comparar el blob completo
+    if (newPhotoUrl.startsWith('data:image')) {
+      const sample = newPhotoUrl.substring(0, 100);
+      return selectedPhotos.some(url => 
+        url.startsWith('data:image') && url.substring(0, 100) === sample
+      );
+    }
+    // Para URLs normales, comparamos la cadena completa
+    return selectedPhotos.includes(newPhotoUrl);
+  };
 
   const handleGalleryPhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -105,9 +120,12 @@ const ServiceForm = ({
       const reader = new FileReader();
       reader.onloadend = () => {
         const photoUrl = reader.result as string;
-        setSelectedPhotos(prev => [...prev, photoUrl]);
-        // Remove from removal list if re-added
-        setPhotosToRemove(prev => prev.filter(index => index >= selectedPhotos.length));
+        // Verificar duplicados antes de agregar
+        if (!isDuplicatePhoto(photoUrl)) {
+          setSelectedPhotos(prev => [...prev, photoUrl]);
+        }
+        // Limpiar el input para permitir seleccionar el mismo archivo nuevamente
+        e.target.value = '';
       };
       reader.readAsDataURL(file);
     }
@@ -119,7 +137,12 @@ const ServiceForm = ({
       const reader = new FileReader();
       reader.onloadend = () => {
         const photoUrl = reader.result as string;
-        setSelectedPhotos(prev => [...prev, photoUrl]);
+        // Verificar duplicados antes de agregar
+        if (!isDuplicatePhoto(photoUrl)) {
+          setSelectedPhotos(prev => [...prev, photoUrl]);
+        }
+        // Limpiar el input para permitir capturar otra foto
+        e.target.value = '';
       };
       reader.readAsDataURL(file);
     }
@@ -364,7 +387,7 @@ const ServiceForm = ({
               </div>
             )}
           </div>
-          <DialogFooter className="flex justify-between mt-6">
+          <DialogFooter className="flex justify-between sm:justify-end mt-6 gap-2">
             <Button variant="outline" onClick={() => setPreviewOpen(false)} disabled={isSubmitting}>
               <X className="w-4 h-4 mr-2" />
               Cancelar
