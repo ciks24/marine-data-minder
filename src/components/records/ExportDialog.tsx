@@ -38,7 +38,6 @@ const ExportDialog: React.FC<ExportDialogProps> = ({
   const [selectedClient, setSelectedClient] = useState<string>('');
   const [isExporting, setIsExporting] = useState(false);
   const [clientList, setClientList] = useState<string[]>([]);
-  const [progress, setProgress] = useState(0);
 
   // Extraer lista única de clientes
   useEffect(() => {
@@ -55,34 +54,28 @@ const ExportDialog: React.FC<ExportDialogProps> = ({
   const handleExport = async () => {
     try {
       setIsExporting(true);
-      setProgress(10);
       
       // Mostrar toast de inicio
-      toast.info('Iniciando exportación. Por favor espere mientras se procesan las imágenes...');
+      toast.info('Iniciando exportación a Excel...');
       
       // Pequeña pausa para permitir que la UI se actualice
       await new Promise(resolve => setTimeout(resolve, 100));
-      
-      setProgress(30);
       
       if (exportOption === 'today') {
         await exportToExcel(services, 'today');
       } else if (exportOption === 'byClient' && selectedClient) {
         // Filtrar servicios por cliente seleccionado
         const filteredServices = services.filter(s => s.clientName === selectedClient);
-        setProgress(60);
         await exportToExcel(filteredServices, 'all', []);
       }
       
-      setProgress(100);
-      toast.success('Registros exportados exitosamente con imágenes incluidas');
+      toast.success('Registros exportados exitosamente con URLs a las imágenes');
       onOpenChange(false);
     } catch (error) {
       console.error('Error exporting to Excel:', error);
       toast.error(error instanceof Error ? error.message : 'Error al exportar los registros');
     } finally {
       setIsExporting(false);
-      setProgress(0);
     }
   };
 
@@ -92,7 +85,7 @@ const ExportDialog: React.FC<ExportDialogProps> = ({
         <DialogHeader>
           <DialogTitle className="app-title">Exportar Registros</DialogTitle>
           <DialogDescription>
-            Selecciona cómo deseas exportar los registros. Las imágenes se incluirán directamente en el archivo Excel.
+            Selecciona cómo deseas exportar los registros. Se incluirán URLs a las imágenes para facilitar su consulta.
           </DialogDescription>
         </DialogHeader>
         
@@ -132,20 +125,6 @@ const ExportDialog: React.FC<ExportDialogProps> = ({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-          )}
-          
-          {isExporting && (
-            <div className="mt-4">
-              <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mt-2">
-                <div 
-                  className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" 
-                  style={{ width: `${progress}%` }}
-                ></div>
-              </div>
-              <p className="text-sm text-muted-foreground mt-1 text-center">
-                Procesando imágenes... {progress}%
-              </p>
             </div>
           )}
         </div>
