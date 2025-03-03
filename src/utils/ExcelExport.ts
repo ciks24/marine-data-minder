@@ -1,3 +1,4 @@
+
 import ExcelJS from 'exceljs';
 import { MarineService } from '@/types/service';
 
@@ -18,6 +19,35 @@ const formatDateTime = (dateStr: string) => {
   });
 };
 
+// Función para descargar una imagen desde una URL y convertirla en un buffer
+const getImageBuffer = async (url: string): Promise<Buffer | null> => {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error(`Error fetching image: ${response.statusText}`);
+      return null;
+    }
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (!reader.result) {
+          reject(new Error('Failed to read image'));
+          return;
+        }
+        // Convertir la imagen a un buffer que ExcelJS pueda usar
+        const buffer = Buffer.from(reader.result as ArrayBuffer);
+        resolve(buffer);
+      };
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(blob);
+    });
+  } catch (error) {
+    console.error('Error converting image to buffer:', error);
+    return null;
+  }
+};
+
 export const exportToExcel = async (services: MarineService[], timeRange: ExportTimeRange = 'all', selectedIds: string[] = []) => {
   // Filter services based on time range
   const filtered = filterServicesByTimeRange(services, timeRange, selectedIds);
@@ -36,8 +66,7 @@ export const exportToExcel = async (services: MarineService[], timeRange: Export
     { header: 'Embarcación', key: 'vesselName', width: 30 },
     { header: 'Fecha y Hora', key: 'startDateTime', width: 25 },
     { header: 'Detalle', key: 'details', width: 50 },
-    { header: 'Cantidad de Fotos', key: 'photosCount', width: 15 },
-    { header: 'Enlaces a Fotos', key: 'photoLinks', width: 50 }
+    { header: 'Fotos', key: 'photos', width: 50 },
   ];
 
   // Add style to header row
@@ -49,16 +78,60 @@ export const exportToExcel = async (services: MarineService[], timeRange: Export
   };
 
   // Add data
-  filtered.forEach(service => {
+  for (const service of filtered) {
+    // Añadir la fila de datos básicos
+    const rowNumber = worksheet.rowCount + 1;
     worksheet.addRow({
       clientName: service.clientName,
       vesselName: service.vesselName,
       startDateTime: formatDateTime(service.startDateTime),
       details: service.details,
-      photosCount: getPhotosCount(service),
-      photoLinks: getPhotoLinks(service).join(', ')
+      photos: '' // Esta celda se ajustará para mostrar imágenes
     });
-  });
+    
+    // Recopilar todas las URLs únicas de imágenes
+    const photoUrls = getPhotoLinks(service);
+    
+    if (photoUrls.length > 0) {
+      // Ajustar la altura de la fila para acomodar las imágenes
+      worksheet.getRow(rowNumber).height = 120;
+      
+      // Añadir imágenes a la celda de fotos
+      for (let i = 0; i < photoUrls.length; i++) {
+        try {
+          const imageBuffer = await getImageBuffer(photoUrls[i]);
+          if (imageBuffer) {
+            const imageId = workbook.addImage({
+              buffer: imageBuffer,
+              extension: 'jpeg', // o detectar la extensión correcta
+            });
+            
+            // Calcular posición para colocar la imagen en la celda
+            const margin = i * 140; // Espacio horizontal entre imágenes
+            
+            worksheet.addImage(imageId, {
+              tl: { col: 4, row: rowNumber - 1 },
+              ext: { width: 120, height: 100 },
+              editAs: 'oneCell',
+              hyperlinks: {
+                hyperlink: photoUrls[i],
+                tooltip: `Foto ${i+1}`
+              }
+            });
+          }
+        } catch (error) {
+          console.error(`Error adding image ${i+1} for service ${service.id}:`, error);
+          // Añadir texto alternativo en caso de error
+          const cell = worksheet.getCell(`E${rowNumber}`);
+          if (cell.value) {
+            cell.value = `${cell.value}, [Error con foto ${i+1}]`;
+          } else {
+            cell.value = `[Error con foto ${i+1}]`;
+          }
+        }
+      }
+    }
+  }
 
   // Auto-fit columns
   worksheet.columns.forEach(column => {
