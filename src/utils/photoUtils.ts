@@ -1,4 +1,3 @@
-
 import { MarineService } from '@/types/service';
 
 /**
@@ -28,13 +27,14 @@ export const prepareUniquePhotoUrls = (service: MarineService): string[] => {
 };
 
 /**
- * Genera un hash simple para detectar duplicados en data URLs de imágenes
- * @param str String a hashear (normalmente una data URL)
- * @returns Hash como string hexadecimal
+ * Genera un hash más robusto para detectar duplicados
+ * @param str - String a convertir en hash
+ * @returns Hash como string
  */
 export const generateImageHash = (str: string): string => {
-  // Para imágenes data:URL, usamos los primeros 500 caracteres
-  const sample = str.substring(0, 500);
+  // Para imágenes data:URL, usamos los primeros 1000 caracteres que contienen la
+  // información de cabecera y parte de los datos
+  const sample = str.substring(0, 1000);
   
   // Algoritmo simple de hashing
   let hash = 0;
@@ -42,23 +42,55 @@ export const generateImageHash = (str: string): string => {
     hash = ((hash << 5) - hash) + sample.charCodeAt(i);
     hash |= 0; // Convertir a entero de 32 bits
   }
-  return hash.toString(16);
+  return hash.toString(16); // Convertir a hexadecimal para hacerlo más compacto
 };
 
 /**
- * Verifica si una imagen es un duplicado en una colección de imágenes
- * @param newPhotoUrl URL o data URL de la nueva imagen
- * @param existingPhotos Array de URLs o data URLs existentes
- * @returns true si es un duplicado, false si no lo es
+ * Verifica si una foto es duplicada comparando con un array de fotos existentes
+ * @param newPhoto - URL de la nueva foto
+ * @param existingPhotos - Array de URLs de fotos existentes
+ * @returns true si la foto es duplicada
  */
-export const isDuplicatePhoto = (newPhotoUrl: string, existingPhotos: string[]): boolean => {
-  // Para data URLs, comparamos un hash
-  if (newPhotoUrl.startsWith('data:image')) {
-    const newHash = generateImageHash(newPhotoUrl);
-    return existingPhotos.some(url => 
-      url.startsWith('data:image') && generateImageHash(url) === newHash
-    );
+export const isDuplicatePhoto = (newPhoto: string, existingPhotos: string[]): boolean => {
+  if (!newPhoto || !existingPhotos.length) return false;
+  
+  // Si la foto es una URL ya subida, comparar directamente
+  if (!newPhoto.startsWith('data:image')) {
+    return existingPhotos.includes(newPhoto);
   }
-  // Para URLs normales, comparamos la cadena completa
-  return existingPhotos.includes(newPhotoUrl);
+  
+  // Para fotos en formato data URL, usar hash
+  const newHash = generateImageHash(newPhoto);
+  return existingPhotos.some(photo => {
+    if (!photo.startsWith('data:image')) return false;
+    return generateImageHash(photo) === newHash;
+  });
+};
+
+/**
+ * Elimina duplicados de un array de URLs de fotos
+ * @param photos - Array de URLs de fotos
+ * @returns Array de URLs únicas
+ */
+export const removeDuplicatePhotos = (photos: string[]): string[] => {
+  const uniquePhotos = new Map<string, string>();
+  
+  photos.forEach(photo => {
+    if (!photo) return;
+    
+    if (!photo.startsWith('data:image')) {
+      // Para URLs ya subidas, usar la URL como clave
+      if (!uniquePhotos.has(photo)) {
+        uniquePhotos.set(photo, photo);
+      }
+    } else {
+      // Para data URLs, usar hash como clave
+      const hash = generateImageHash(photo);
+      if (!uniquePhotos.has(hash)) {
+        uniquePhotos.set(hash, photo);
+      }
+    }
+  });
+  
+  return Array.from(uniquePhotos.values());
 };

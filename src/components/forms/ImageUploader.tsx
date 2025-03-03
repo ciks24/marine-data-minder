@@ -1,9 +1,8 @@
-
 import React from 'react';
 import { Camera, Image, X, Plus } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
-import { isDuplicatePhoto } from '@/utils/photoUtils';
+import { isDuplicatePhoto, removeDuplicatePhotos } from '@/utils/photoUtils';
 
 interface ImageUploaderProps {
   selectedPhotos: string[];
@@ -28,7 +27,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
         const photoUrl = reader.result as string;
         // Verificar duplicados antes de agregar
         if (!isDuplicatePhoto(photoUrl, selectedPhotos)) {
-          setSelectedPhotos(prev => [...prev, photoUrl]);
+          setSelectedPhotos(prev => removeDuplicatePhotos([...prev, photoUrl]));
           console.log('Foto de galería añadida');
         } else {
           console.log('Foto de galería duplicada, no se añadió');
@@ -48,7 +47,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
         const photoUrl = reader.result as string;
         // Verificar duplicados antes de agregar
         if (!isDuplicatePhoto(photoUrl, selectedPhotos)) {
-          setSelectedPhotos(prev => [...prev, photoUrl]);
+          setSelectedPhotos(prev => removeDuplicatePhotos([...prev, photoUrl]));
           console.log('Foto de cámara añadida');
         } else {
           console.log('Foto de cámara duplicada, no se añadió');
