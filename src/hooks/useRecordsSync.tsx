@@ -5,7 +5,6 @@ import { syncService, useOnlineStatus } from '@/services/syncService';
 import { useAuth } from './useAuth';
 import { openDB } from 'idb';
 import { checkSupabaseConnection } from '@/integrations/supabase/client';
-import { fetchAllServices, saveService } from '@/services/syncService';
 
 // Configuración de IndexedDB
 const DB_NAME = 'marine-data-minder-v3';
