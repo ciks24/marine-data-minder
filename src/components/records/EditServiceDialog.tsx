@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import ServiceForm from '../ServiceForm';
 import { MarineService, ServiceFormData } from '@/types/service';
+import { prepareUniquePhotoUrls } from '@/utils/photoUtils';
 
 interface EditServiceDialogProps {
   open: boolean;
@@ -26,28 +27,7 @@ const EditServiceDialog: React.FC<EditServiceDialogProps> = ({
 }) => {
   if (!service) return null;
 
-  // Prepare unique photo URLs from the service
-  const prepareUniquePhotoUrls = () => {
-    const uniqueUrls = new Set<string>();
-    
-    // Add all photos from photoUrls array
-    if (Array.isArray(service.photoUrls)) {
-      service.photoUrls.forEach(url => {
-        if (url && typeof url === 'string') {
-          uniqueUrls.add(url);
-        }
-      });
-    }
-    
-    // Only add photoUrl if it's not already in the set
-    if (service.photoUrl && typeof service.photoUrl === 'string' && !uniqueUrls.has(service.photoUrl)) {
-      uniqueUrls.add(service.photoUrl);
-    }
-    
-    return Array.from(uniqueUrls);
-  };
-
-  const uniquePhotoUrls = prepareUniquePhotoUrls();
+  const uniquePhotoUrls = prepareUniquePhotoUrls(service);
   console.log('Photos en EditServiceDialog:', uniquePhotoUrls);
 
   return (

@@ -1,5 +1,6 @@
-import React from 'react';
-import { Edit2, Trash2, Image } from 'lucide-react';
+
+import React, { useState } from 'react';
+import { Edit2, Image } from 'lucide-react';
 import { 
   Card, 
   CardContent, 
@@ -8,28 +9,11 @@ import {
   CardHeader, 
   CardTitle 
 } from "@/components/ui/card";
-import { 
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger
-} from "@/components/ui/alert-dialog";
 import { Button } from '@/components/ui/button';
 import { Badge } from "@/components/ui/badge";
 import { MarineService } from '@/types/service';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from '@/components/ui/dialog';
+import PhotoDialog from './PhotoDialog';
+import DeleteServiceConfirmation from './DeleteServiceConfirmation';
 
 interface RecordCardProps {
   service: MarineService;
@@ -38,8 +22,8 @@ interface RecordCardProps {
 }
 
 const RecordCard: React.FC<RecordCardProps> = ({ service, onEdit, onDelete }) => {
-  const [photoDialogOpen, setPhotoDialogOpen] = React.useState(false);
-  const [selectedPhotoIndex, setSelectedPhotoIndex] = React.useState(0);
+  const [photoDialogOpen, setPhotoDialogOpen] = useState(false);
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   
   const formatDateTime = (dateTimeStr: string) => {
     const date = new Date(dateTimeStr);
@@ -141,73 +125,22 @@ const RecordCard: React.FC<RecordCardProps> = ({ service, onEdit, onDelete }) =>
             Editar
           </Button>
           
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="h-7 px-2 text-xs text-destructive border-destructive/30 hover:bg-destructive/10 min-w-[60px]"
-              >
-                <Trash2 className="h-3 w-3 mr-1" />
-                Eliminar
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Esta acción no se puede deshacer. Esto eliminará permanentemente el registro.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction onClick={() => onDelete(service.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                  Eliminar
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          <DeleteServiceConfirmation 
+            serviceId={service.id} 
+            onDelete={onDelete} 
+          />
         </CardFooter>
       </Card>
 
-      {/* Photo Dialog */}
-      <Dialog open={photoDialogOpen} onOpenChange={setPhotoDialogOpen}>
-        <DialogContent className="sm:max-w-[90vw] w-[95vw] max-h-[90vh] p-4">
-          <DialogHeader className="space-y-2">
-            <DialogTitle className="text-base">{service.vesselName}</DialogTitle>
-            <DialogDescription className="text-xs">
-              Foto {selectedPhotoIndex + 1} de {photoUrls.length}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col items-center justify-center py-2">
-            {photoUrls.length > 0 && (
-              <img
-                src={photoUrls[selectedPhotoIndex]}
-                alt={`Foto ${selectedPhotoIndex + 1}`}
-                className="max-h-[60vh] w-full object-contain rounded-md"
-                onError={(e) => {
-                  e.currentTarget.src = 'https://via.placeholder.com/400x300?text=Imagen+no+disponible';
-                }}
-              />
-            )}
-          </div>
-          {photoUrls.length > 1 && (
-            <div className="flex justify-center gap-2 mt-2">
-              <Button variant="outline" size="sm" onClick={handlePrevPhoto} className="h-8 px-3 text-xs">
-                Anterior
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleNextPhoto} className="h-8 px-3 text-xs">
-                Siguiente
-              </Button>
-            </div>
-          )}
-          <DialogFooter>
-            <Button size="sm" onClick={() => setPhotoDialogOpen(false)} className="h-8 px-3 text-xs w-full sm:w-auto">
-              Cerrar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <PhotoDialog
+        open={photoDialogOpen}
+        onOpenChange={setPhotoDialogOpen}
+        photos={photoUrls}
+        selectedIndex={selectedPhotoIndex}
+        onNext={handleNextPhoto}
+        onPrev={handlePrevPhoto}
+        title={service.vesselName}
+      />
     </>
   );
 };
