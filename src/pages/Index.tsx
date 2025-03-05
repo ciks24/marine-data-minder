@@ -6,6 +6,7 @@ import { syncService } from '@/services/syncService';
 import { useAuth } from '@/hooks/useAuth';
 import type { ServiceFormData, MarineService } from '../types/service';
 import { openDB } from 'idb';
+import { generateUUID } from '../utils/uuid';
 
 // Configuración de IndexedDB
 const DB_NAME = 'marine-data-minder';
@@ -117,7 +118,7 @@ const Index = () => {
       // Crear nuevo servicio con los datos del formulario
       const newService: MarineService = {
         ...data,
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         synced: false

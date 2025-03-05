@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { MarineService, ServiceFormData } from '@/types/service';
 import { toast } from 'sonner';
 import { removeDuplicatePhotos } from '@/utils/photoUtils';
+import { generateUUID } from '../utils/uuid';
 
 /**
  * Servicio para sincronizar datos con Supabase
@@ -32,7 +33,7 @@ export const syncService = {
       const file = new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
 
       // Nombre único para la imagen
-      const filePath = `${crypto.randomUUID()}.jpg`;
+      const filePath = `${generateUUID()}.jpg`;
       
       // Subir la imagen a Supabase Storage
       const { data, error } = await supabase.storage
