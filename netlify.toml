@@ -3,10 +3,6 @@
   publish = "dist"
   environment = { NODE_VERSION = "20" }
 
-[build.environment]
-  VITE_SUPABASE_URL = "process.env.VITE_SUPABASE_URL"
-  VITE_SUPABASE_ANON_KEY = "process.env.VITE_SUPABASE_ANON_KEY"
-
 [[redirects]]
   from = "/*"
   to = "/index.html"
